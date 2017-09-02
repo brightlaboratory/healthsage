@@ -128,6 +128,18 @@ object SimpleApp {
   })
 
   def predictAverageTotalPaymentsUsingRegression(origDf: DataFrame) = {
+
+    origDf.createOrReplaceTempView("payments")
+    origDf.sparkSession.sql("SELECT DRGDefinition, MIN(AverageTotalPayments)," +
+      " AVG(AverageTotalPayments), MAX(AverageTotalPayments) " +
+      "FROM payments GROUP BY DRGDefinition ORDER BY AVG(AverageTotalPayments)")
+      .show(10000, false)
+
+    origDf.sparkSession.sql("SELECT ProviderZipCode, MIN(AverageTotalPayments)," +
+      " AVG(AverageTotalPayments), MAX(AverageTotalPayments) " +
+      "FROM payments GROUP BY ProviderZipCode ORDER BY AVG(AverageTotalPayments)")
+      .show(100, false)
+
     // We want to predict AverageTotalPayments as a function of DRGDefinition, and ProviderZipCode
     origDf.select("DRGDefinition", "ProviderZipCode", "AverageTotalPayments").take(10)
       .foreach(v => println("ROW: " + v))
