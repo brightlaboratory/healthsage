@@ -2,13 +2,11 @@
 
 
 import org.apache.spark.SparkContext
-import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.sql.functions._
-import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.classification.RandomForestClassifier
-import org.apache.spark.ml.evaluation.{MulticlassClassificationEvaluator, RegressionEvaluator}
-import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler, VectorIndexer}
-import org.apache.spark.ml.regression.{RandomForestRegressionModel, RandomForestRegressor}
+import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.{DataFrame, SparkSession}
 
 object SimpleApp {
 
@@ -78,6 +76,7 @@ object SimpleApp {
     val df2 = assembler.transform(df_feature2)
 
     val labelIndexer = new StringIndexer().setInputCol("paymentLabel").setOutputCol("label")
+    val labelIndexerModel = labelIndexer.fit(df2)
     val df3 = labelIndexer.fit(df2).transform(df2)
 
     df3.createOrReplaceTempView("df3")
@@ -111,6 +110,15 @@ object SimpleApp {
       .setMetricName("accuracy")
     val accuracy = evaluator.evaluate(predictions)
     println("accuracy: " + accuracy)
+
+    val converter = new IndexToString().setInputCol("prediction")
+      .setOutputCol("originalValue")
+      .setLabels(labelIndexerModel.labels)
+    val df4 = converter.transform(predictions)
+
+    df4.select("DRGDefinition", "ProviderZipCode", "AverageCoveredCharges",
+      "AverageTotalPayments", "AverageMedicarePayments", "label", "prediction",
+      "originalValue").show(5)
   }
 
   def calculateStats(df: DataFrame): Unit = {
