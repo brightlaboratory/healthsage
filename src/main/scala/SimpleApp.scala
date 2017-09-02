@@ -3,8 +3,9 @@
 
 import org.apache.spark.SparkContext
 import org.apache.spark.ml.classification.RandomForestClassifier
-import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import org.apache.spark.ml.evaluation.{MulticlassClassificationEvaluator, RegressionEvaluator}
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
+import org.apache.spark.ml.regression.RandomForestRegressor
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
@@ -55,6 +56,7 @@ object SimpleApp {
     (money.toInt - (money.toInt % 100)).toString
   })
 
+
   def predictAverageTotalPayments(origDf: DataFrame) = {
     // We want to predict AverageTotalPayments as a function of DRGDefinition, and ProviderZipCode
     origDf.select("DRGDefinition", "ProviderZipCode", "AverageCoveredCharges",
@@ -90,7 +92,7 @@ object SimpleApp {
 
     val classifier = new RandomForestClassifier()
       .setImpurity("gini")
-      .setMaxDepth(3)
+      .setMaxDepth(5)
       .setNumTrees(20)
       .setFeatureSubsetStrategy("auto")
       .setMaxBins(100000)
@@ -121,7 +123,55 @@ object SimpleApp {
       "originalValue").show(5)
   }
 
+  val toDouble = udf((str: String) => {
+    str.toDouble
+  })
+
+  def predictAverageTotalPaymentsUsingRegression(origDf: DataFrame) = {
+    // We want to predict AverageTotalPayments as a function of DRGDefinition, and ProviderZipCode
+    origDf.select("DRGDefinition", "ProviderZipCode", "AverageTotalPayments").take(10)
+      .foreach(v => println("ROW: " + v))
+
+    // We will use AverageTotalPayments as the label
+    val df = origDf.withColumn("label", origDf("AverageTotalPayments"))
+      .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+
+    val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
+      .setOutputCol("feature1")
+    val df_feature1 = feature1Indexer.fit(df).transform(df)
+
+    val assembler = new VectorAssembler().setInputCols(Array("feature1",
+      "ProviderZipCodeDouble")).setOutputCol("features")
+    val df2 = assembler.transform(df_feature1)
+
+    val splitSeed = 5043
+    val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
+
+    val classifier = new RandomForestRegressor()
+      .setImpurity("variance")
+      .setMaxDepth(8)
+      .setNumTrees(20)
+      .setMaxBins(100)
+      .setFeatureSubsetStrategy("auto")
+      .setSeed(5043)
+
+    val model = classifier.fit(trainingData)
+    println("model: " + model.toDebugString)
+    println("model.featureImportances: " + model.featureImportances)
+
+    val predictions = model.transform(testData)
+    predictions.select("DRGDefinition", "ProviderZipCode",
+      "AverageTotalPayments", "label", "prediction").show(50)
+
+    val evaluator = new RegressionEvaluator()
+      .setLabelCol("label")
+      .setPredictionCol("prediction")
+      .setMetricName("r2")
+    val accuracy = evaluator.evaluate(predictions)
+    println("r2: " + accuracy)
+  }
+
   def calculateStats(df: DataFrame): Unit = {
-    predictAverageTotalPayments(df)
+    predictAverageTotalPaymentsUsingRegression(df)
   }
 }
