@@ -3,6 +3,12 @@
 
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.functions._
+import org.apache.spark.ml.Pipeline
+import org.apache.spark.ml.classification.RandomForestClassifier
+import org.apache.spark.ml.evaluation.{MulticlassClassificationEvaluator, RegressionEvaluator}
+import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler, VectorIndexer}
+import org.apache.spark.ml.regression.{RandomForestRegressionModel, RandomForestRegressor}
 
 object SimpleApp {
 
@@ -17,25 +23,97 @@ object SimpleApp {
       .option("header", "true") //reading the headers
       .csv(getClass.getClassLoader.getResource("medicare_payment_2011.csv").getPath)
 
-    val df = normalizeHeaders(orig_df)
+    val dollarColumns = Array("AverageCoveredCharges", "AverageTotalPayments",
+      "AverageMedicarePayments")
+    val df = removeLeadingDollarSign(normalizeHeaders(orig_df), dollarColumns)
     calculateStats(df)
-//    df.take(10).foreach(row => println("ROW: " + row))
   }
+
+  def removeLeadingDollarSign(df: DataFrame, columnNames: Array[String]) = {
+    var newDf = df
+    val suffix = "_new"
+    columnNames.foreach(v => newDf = newDf.withColumn(v + suffix, removeDollarSign(newDf(v))))
+
+    // We remove old columns
+    columnNames.foreach(v => newDf = newDf.drop(v))
+    columnNames.foreach(v => newDf = newDf.withColumnRenamed(v + suffix, v))
+    newDf
+  }
+
+  val removeDollarSign = udf((money: String) => {
+    money.replaceAll("\\$", "").toDouble
+  })
 
   def normalizeHeaders(df: DataFrame) = {
     var newDf = df
     for(col <- df.columns){
-      newDf = newDf.withColumnRenamed(col,col.replaceAll("\\s", "_"))
+      newDf = newDf.withColumnRenamed(col,col.replaceAll("\\s", ""))
     }
 
     newDf
   }
 
-  def calculateStats(df: DataFrame): Unit = {
-    df.createOrReplaceTempView("payment")
-    df.sparkSession.sql("SELECT Provider_Zip_Code, COUNT(*) as count " +
-      "FROM payment GROUP BY Provider_Zip_Code").show()
+  val doubleToLabel = udf((money: Double) => {
+    (money.toInt - (money.toInt % 100)).toString
+  })
 
-    df.sparkSession.sql("SELECT DISTINCT DRG_Definition FROM payment").show(10000)
+  def predictAverageTotalPayments(origDf: DataFrame) = {
+    // We want to predict AverageTotalPayments as a function of DRGDefinition, and ProviderZipCode
+    origDf.select("DRGDefinition", "ProviderZipCode", "AverageCoveredCharges",
+      "AverageTotalPayments", "AverageMedicarePayments").take(10)
+      .foreach(v => println("ROW: " + v))
+
+    // We will use AverageTotalPayments as the label
+    val df = origDf.withColumn("paymentLabel", doubleToLabel(origDf("AverageTotalPayments")))
+
+    val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition").setOutputCol("feature1")
+    val df_feature1 = feature1Indexer.fit(df).transform(df)
+
+    val feature2Indexer = new StringIndexer().setInputCol("ProviderZipCode")
+      .setOutputCol("feature2")
+    val df_feature2 = feature2Indexer.fit(df_feature1).transform(df_feature1)
+
+    val assembler = new VectorAssembler().setInputCols(Array("feature1",
+      "feature2")).setOutputCol("features")
+    val df2 = assembler.transform(df_feature2)
+
+    val labelIndexer = new StringIndexer().setInputCol("paymentLabel").setOutputCol("label")
+    val df3 = labelIndexer.fit(df2).transform(df2)
+
+    df3.createOrReplaceTempView("df3")
+    df_feature1.sparkSession.sql("SELECT COUNT(DISTINCT feature2) FROM df3").show(10000)
+
+    df3.show(10)
+    df3.printSchema()
+
+    val splitSeed = 5043
+    val Array(trainingData, testData) = df3.randomSplit(Array(0.7, 0.3), splitSeed)
+
+    val classifier = new RandomForestClassifier()
+      .setImpurity("gini")
+      .setMaxDepth(3)
+      .setNumTrees(20)
+      .setFeatureSubsetStrategy("auto")
+      .setMaxBins(100000)
+      .setSeed(5043)
+    val model = classifier.fit(trainingData)
+    println("model: " + model.toDebugString)
+    println("model.featureImportances: " + model.featureImportances)
+    model.trees.foreach(tree => println("TREE: " + tree.toDebugString))
+
+    val predictions = model.transform(testData)
+    predictions.select("DRGDefinition", "ProviderZipCode", "AverageCoveredCharges",
+      "AverageTotalPayments", "AverageMedicarePayments", "label", "prediction").show(5)
+
+    val evaluator = new MulticlassClassificationEvaluator()
+      .setLabelCol("label")
+      .setPredictionCol("prediction")
+      .setMetricName("accuracy")
+    val accuracy = evaluator.evaluate(predictions)
+    println("accuracy: " + accuracy)
+  }
+
+  def calculateStats(df: DataFrame): Unit = {
+    predictAverageTotalPayments(df)
   }
 }
