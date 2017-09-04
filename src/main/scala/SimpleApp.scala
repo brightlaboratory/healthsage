@@ -3,6 +3,7 @@
 
 import org.apache.spark.SparkContext
 import org.apache.spark.ml.classification.RandomForestClassifier
+import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.ml.evaluation.{MulticlassClassificationEvaluator, RegressionEvaluator}
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
 import org.apache.spark.ml.regression.RandomForestRegressor
@@ -183,7 +184,81 @@ object SimpleApp {
     println("r2: " + accuracy)
   }
 
+  def applyKmeans(origDf: DataFrame) = {
+
+    origDf.createOrReplaceTempView("payments")
+    origDf.sparkSession.sql("SELECT DRGDefinition, MIN(AverageTotalPayments)," +
+      " AVG(AverageTotalPayments), MAX(AverageTotalPayments) " +
+      "FROM payments GROUP BY DRGDefinition ORDER BY AVG(AverageTotalPayments)")
+      .show(10000, false)
+
+    origDf.sparkSession.sql("SELECT ProviderZipCode, MIN(AverageTotalPayments)," +
+      " AVG(AverageTotalPayments), MAX(AverageTotalPayments) " +
+      "FROM payments GROUP BY ProviderZipCode ORDER BY AVG(AverageTotalPayments)")
+      .show(100, false)
+
+    // We want to predict AverageTotalPayments as a function of DRGDefinition, and ProviderZipCode
+    origDf.select("DRGDefinition", "ProviderZipCode", "AverageTotalPayments").take(10)
+      .foreach(v => println("ROW: " + v))
+
+    val df = origDf // .withColumn("label", origDf("AverageTotalPayments"))
+      .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+
+    val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
+      .setOutputCol("feature1")
+    val df_feature1 = feature1Indexer.fit(df).transform(df)
+
+    val assembler = new VectorAssembler().setInputCols(Array("feature1",
+      "ProviderZipCodeDouble", "AverageTotalPayments")).setOutputCol("features")
+    val df2 = assembler.transform(df_feature1)
+
+    val splitSeed = 5043
+    val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
+
+    val kmeans = new KMeans().setK(2).setSeed(1L)
+    val model = kmeans.fit(trainingData)
+
+    println("kmeans model: " + model)
+    println("kmeans model.summary.clusterSizes: " + model.summary.clusterSizes.deep)
+
+    import trainingData.sparkSession.implicits._
+
+    val df4 = model.transform(testData)
+
+    df4.show(10, truncate = false)
+    df4.printSchema()
+
+    println("Whole dataset stats:")
+    df4.select(min($"AverageTotalPayments"),
+      avg($"AverageTotalPayments"), max($"AverageTotalPayments")).show(false)
+
+    println("Cluster 0 AverageTotalPayments:")
+
+    df4.filter($"prediction" === 0).select(min($"AverageTotalPayments"),
+      avg($"AverageTotalPayments"), max($"AverageTotalPayments")).show(false)
+
+    println("Cluster 1 AverageTotalPayments:")
+    df4.filter($"prediction" === 1).select(min($"AverageTotalPayments"),
+      avg($"AverageTotalPayments"), max($"AverageTotalPayments")).show(false)
+
+    println("Cluster 0 ProviderZipCodeDouble:")
+
+    df4.filter($"prediction" === 0).select(min($"ProviderZipCodeDouble"),
+      avg($"ProviderZipCodeDouble"), max($"ProviderZipCodeDouble")).show(false)
+
+    println("Cluster 1 ProviderZipCodeDouble:")
+    df4.filter($"prediction" === 1).select(min($"ProviderZipCodeDouble"),
+      avg($"ProviderZipCodeDouble"), max($"ProviderZipCodeDouble")).show(false)
+
+    // Evaluate clustering by computing Within Set Sum of Squared Errors.
+    val WSSSE = model.computeCost(trainingData)
+    println(s"Within Set Sum of Squared Errors = $WSSSE")
+
+    println("Cluster centers:")
+    model.clusterCenters.foreach(println)
+  }
+
   def calculateStats(df: DataFrame): Unit = {
-    predictAverageTotalPaymentsUsingRegression(df)
+    applyKmeans(df)
   }
 }
