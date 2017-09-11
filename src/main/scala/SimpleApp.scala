@@ -3,6 +3,8 @@
 
 import org.apache.spark.SparkContext
 import org.apache.spark.ml.classification.RandomForestClassifier
+import org.apache.spark.ml.classification.NaiveBayes
+import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.ml.evaluation.{MulticlassClassificationEvaluator, RegressionEvaluator}
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
@@ -13,7 +15,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 object SimpleApp {
 
   def countWords(sc: SparkContext): Unit = {
-    val pathToFiles = "/Users/newpc/work/research/healthsage/pom.xml"
+    val pathToFiles = "/Users/anujatike/Downloads/healthsage-master/pom.xml"
     val files = sc.textFile(pathToFiles)
     println("Count: " + files.count())
   }
@@ -26,7 +28,7 @@ object SimpleApp {
     val dollarColumns = Array("AverageCoveredCharges", "AverageTotalPayments",
       "AverageMedicarePayments")
     val df = removeLeadingDollarSign(normalizeHeaders(orig_df), dollarColumns)
-    calculateStats(df)
+    calculateStats(df) //?
   }
 
   def removeLeadingDollarSign(df: DataFrame, columnNames: Array[String]) = {
@@ -53,11 +55,12 @@ object SimpleApp {
     newDf
   }
 
+  //?
   val doubleToLabel = udf((money: Double) => {
     (money.toInt - (money.toInt % 100)).toString
   })
 
-
+  //?
   def predictAverageTotalPayments(origDf: DataFrame) = {
     // We want to predict AverageTotalPayments as a function of DRGDefinition, and ProviderZipCode
     origDf.select("DRGDefinition", "ProviderZipCode", "AverageCoveredCharges",
@@ -91,6 +94,8 @@ object SimpleApp {
     val splitSeed = 5043
     val Array(trainingData, testData) = df3.randomSplit(Array(0.7, 0.3), splitSeed)
 
+    //Random Forest Classifier
+
     val classifier = new RandomForestClassifier()
       .setImpurity("gini")
       .setMaxDepth(5)
@@ -107,6 +112,8 @@ object SimpleApp {
     predictions.select("DRGDefinition", "ProviderZipCode", "AverageCoveredCharges",
       "AverageTotalPayments", "AverageMedicarePayments", "label", "prediction").show(5)
 
+
+
     val evaluator = new MulticlassClassificationEvaluator()
       .setLabelCol("label")
       .setPredictionCol("prediction")
@@ -122,11 +129,42 @@ object SimpleApp {
     df4.select("DRGDefinition", "ProviderZipCode", "AverageCoveredCharges",
       "AverageTotalPayments", "AverageMedicarePayments", "label", "prediction",
       "originalValue").show(5)
+
+    //Naive Bayes Classifier
+
+    // Train a NaiveBayes model.
+    val model_naiveBayes = new NaiveBayes()
+      .fit(trainingData)
+
+    // Select example rows to display.
+    val predictions_naiveBayes = model_naiveBayes.transform(testData)
+    predictions_naiveBayes.show()
+
+    // Select (prediction, true label) and compute test error
+    val evaluator_naiveBayes = new MulticlassClassificationEvaluator()
+      .setLabelCol("label")
+      .setPredictionCol("prediction")
+      .setMetricName("accuracy")
+
+    val accuracy_naiveBayes = evaluator_naiveBayes.evaluate(predictions_naiveBayes)
+    println("Test set accuracy = " + accuracy_naiveBayes)
+
+    val converter_naiveBayes = new IndexToString().setInputCol("prediction")
+      .setOutputCol("originalValue")
+      .setLabels(labelIndexerModel.labels)
+    val df5 = converter_naiveBayes.transform(predictions_naiveBayes)
+
+    df5.select("DRGDefinition", "ProviderZipCode", "AverageCoveredCharges",
+      "AverageTotalPayments", "AverageMedicarePayments", "label", "prediction",
+      "originalValue").show(5)
+
   }
 
   val toDouble = udf((str: String) => {
     str.toDouble
   })
+
+  //Regression
 
   def predictAverageTotalPaymentsUsingRegression(origDf: DataFrame) = {
 
@@ -169,7 +207,7 @@ object SimpleApp {
       .setSeed(5043)
 
     val model = classifier.fit(trainingData)
-    println("model: " + model.toDebugString)
+    println("model: " + model.toDebugString) //?
     println("model.featureImportances: " + model.featureImportances)
 
     val predictions = model.transform(testData)
@@ -183,6 +221,8 @@ object SimpleApp {
     val accuracy = evaluator.evaluate(predictions)
     println("r2: " + accuracy)
   }
+
+  // K- Means Clustering
 
   def applyKmeans(origDf: DataFrame) = {
 
@@ -259,6 +299,6 @@ object SimpleApp {
   }
 
   def calculateStats(df: DataFrame): Unit = {
-    applyKmeans(df)
+    predictAverageTotalPayments(df)
   }
 }
