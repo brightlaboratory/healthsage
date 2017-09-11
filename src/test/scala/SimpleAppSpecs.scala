@@ -20,6 +20,7 @@ class SimpleAppSpecs extends FlatSpec with BeforeAndAfter {
     sparkSession = SparkSession.builder.
       master(master)
       .appName("spark session example")
+
       .getOrCreate()
   }
 
