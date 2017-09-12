@@ -5,6 +5,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.ml.classification.RandomForestClassifier
 import org.apache.spark.ml.classification.NaiveBayes
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import org.apache.spark.ml.regression.GeneralizedLinearRegression
 import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.ml.evaluation.{MulticlassClassificationEvaluator, RegressionEvaluator}
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
@@ -28,7 +29,7 @@ object SimpleApp {
     val dollarColumns = Array("AverageCoveredCharges", "AverageTotalPayments",
       "AverageMedicarePayments")
     val df = removeLeadingDollarSign(normalizeHeaders(orig_df), dollarColumns)
-    calculateStats(df) //?
+    calculateStats(df) // calling all other methods from here
   }
 
   def removeLeadingDollarSign(df: DataFrame, columnNames: Array[String]) = {
@@ -168,22 +169,8 @@ object SimpleApp {
 
   def predictAverageTotalPaymentsUsingRegression(origDf: DataFrame) = {
 
-    origDf.createOrReplaceTempView("payments")
-    origDf.sparkSession.sql("SELECT DRGDefinition, MIN(AverageTotalPayments)," +
-      " AVG(AverageTotalPayments), MAX(AverageTotalPayments) " +
-      "FROM payments GROUP BY DRGDefinition ORDER BY AVG(AverageTotalPayments)")
-      .show(10000, false)
-
-    origDf.sparkSession.sql("SELECT ProviderZipCode, MIN(AverageTotalPayments)," +
-      " AVG(AverageTotalPayments), MAX(AverageTotalPayments) " +
-      "FROM payments GROUP BY ProviderZipCode ORDER BY AVG(AverageTotalPayments)")
-      .show(100, false)
-
-    // We want to predict AverageTotalPayments as a function of DRGDefinition, and ProviderZipCode
-    origDf.select("DRGDefinition", "ProviderZipCode", "AverageTotalPayments").take(10)
-      .foreach(v => println("ROW: " + v))
-
     // We will use AverageTotalPayments as the label
+
     val df = origDf.withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
 
@@ -198,6 +185,8 @@ object SimpleApp {
     val splitSeed = 5043
     val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
 
+    // Random Forest Classifier
+    /*
     val classifier = new RandomForestRegressor()
       .setImpurity("variance")
       .setMaxDepth(8)
@@ -220,6 +209,73 @@ object SimpleApp {
       .setMetricName("r2")
     val accuracy = evaluator.evaluate(predictions)
     println("r2: " + accuracy)
+    */
+
+    // Generalized Linear Regression
+
+    //val familyList = List("gaussian", "Gamma")
+
+
+
+    for (a <- 1 to  3 )
+        {
+          // Family: Gaussian
+
+          val glr = new GeneralizedLinearRegression()
+          .setFamily("gaussian")
+          .setLink("identity")
+          .setMaxIter(10)
+          .setRegParam(0.3)
+
+          // Fit the model on trainingData
+          val model_glr = glr.fit(trainingData)
+
+
+          // Apply the model on testData
+          val predictions_glr = model_glr.transform(testData)
+          predictions_glr.select("DRGDefinition", "ProviderZipCode",
+          "AverageTotalPayments", "label", "prediction").show(5)
+
+          val evaluator_glr = new RegressionEvaluator()
+          .setLabelCol("label")
+          .setPredictionCol("prediction")
+          .setMetricName("r2")
+
+          val accuracy_glr = evaluator_glr.evaluate(predictions_glr)
+          println("Family Gaussian Iteration No: " + a)
+          println("Accuracy Gaussian Family: " + accuracy_glr)
+
+          //Family: Gamma
+
+          val glr2 = new GeneralizedLinearRegression()
+            .setFamily("Gamma")
+            .setLink("identity")
+            .setMaxIter(10)
+            .setRegParam(0.3)
+
+          // Fit the model on trainingData
+          val model_glr2 = glr2.fit(trainingData)
+
+
+          // Apply the model on testData
+          val predictions_glr2 = model_glr2.transform(testData)
+          predictions_glr2.select("DRGDefinition", "ProviderZipCode",
+            "AverageTotalPayments", "label", "prediction").show(5)
+
+          val evaluator_glr2 = new RegressionEvaluator()
+            .setLabelCol("label")
+            .setPredictionCol("prediction")
+            .setMetricName("r2")
+
+          val accuracy_glr2 = evaluator_glr2.evaluate(predictions_glr)
+
+          println("Family Gamma Iteration No: " + a)
+          println("Accuracy Gamma Family: " + accuracy_glr2)
+        }
+
+
+
+
   }
 
   // K- Means Clustering
@@ -298,7 +354,12 @@ object SimpleApp {
     model.clusterCenters.foreach(println)
   }
 
+
+  // Function which calls other functions
+
   def calculateStats(df: DataFrame): Unit = {
-    predictAverageTotalPayments(df)
+    //predictAverageTotalPayments(df)
+    predictAverageTotalPaymentsUsingRegression(df)
+
   }
 }
