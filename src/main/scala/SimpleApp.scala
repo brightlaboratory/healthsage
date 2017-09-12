@@ -2,14 +2,11 @@
 
 
 import org.apache.spark.SparkContext
-import org.apache.spark.ml.classification.RandomForestClassifier
-import org.apache.spark.ml.classification.NaiveBayes
-import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
-import org.apache.spark.ml.regression.GeneralizedLinearRegression
+import org.apache.spark.ml.classification.{NaiveBayes, RandomForestClassifier}
 import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.ml.evaluation.{MulticlassClassificationEvaluator, RegressionEvaluator}
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
-import org.apache.spark.ml.regression.RandomForestRegressor
+import org.apache.spark.ml.regression.{GeneralizedLinearRegression, RandomForestRegressor}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
@@ -56,12 +53,12 @@ object SimpleApp {
     newDf
   }
 
-  //?
+
   val doubleToLabel = udf((money: Double) => {
     (money.toInt - (money.toInt % 100)).toString
   })
 
-  //?
+
   def predictAverageTotalPayments(origDf: DataFrame) = {
     // We want to predict AverageTotalPayments as a function of DRGDefinition, and ProviderZipCode
     origDf.select("DRGDefinition", "ProviderZipCode", "AverageCoveredCharges",
@@ -186,7 +183,7 @@ object SimpleApp {
     val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
 
     // Random Forest Classifier
-    /*
+
     val classifier = new RandomForestRegressor()
       .setImpurity("variance")
       .setMaxDepth(8)
@@ -209,15 +206,12 @@ object SimpleApp {
       .setMetricName("r2")
     val accuracy = evaluator.evaluate(predictions)
     println("r2: " + accuracy)
-    */
+
 
     // Generalized Linear Regression
 
-    //val familyList = List("gaussian", "Gamma")
 
-
-
-    for (a <- 1 to  3 )
+    for (a <- 1 to  10 )
         {
           // Family: Gaussian
 
@@ -358,7 +352,8 @@ object SimpleApp {
   // Function which calls other functions
 
   def calculateStats(df: DataFrame): Unit = {
-    //predictAverageTotalPayments(df)
+    applyKmeans(df)
+    predictAverageTotalPayments(df)
     predictAverageTotalPaymentsUsingRegression(df)
 
   }
