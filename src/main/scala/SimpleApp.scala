@@ -13,21 +13,36 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 object SimpleApp {
 
   def countWords(sc: SparkContext): Unit = {
-    val pathToFiles = "/Users/anujatike/Downloads/healthsage-master/pom.xml"
+    val pathToFiles = "/Users/anujatike/Documents/sem3/RA/healthsage-master/pom.xml"
     val files = sc.textFile(pathToFiles)
     println("Count: " + files.count())
   }
 
   def csvToDf(spark: SparkSession) = {
+
+    //Reading medicare_payment_2011.csv
+
     val orig_df = spark.read
       .option("header", "true") //reading the headers
       .csv(getClass.getClassLoader.getResource("medicare_payment_2011.csv").getPath)
 
     val dollarColumns = Array("AverageCoveredCharges", "AverageTotalPayments",
       "AverageMedicarePayments")
-    val df = removeLeadingDollarSign(normalizeHeaders(orig_df), dollarColumns)
-    calculateStats(df) // calling all other methods from here
+    val paymentDf = removeLeadingDollarSign(normalizeHeaders(orig_df), dollarColumns)
+    //calculateStats(paymentDf) // calling all other methods from here
+
+    //Reading Zip_MedianValuePerSqft_AllHomes.csv
+
+    val priceDf = spark.read
+      .option("header", "true") //reading the headers
+      .csv(getClass.getClassLoader.getResource("prices.csv").getPath)
+    //calculatesStats2(priceDf)
+
+    joinOnZipCode(paymentDf,priceDf)
+
+
   }
+
 
   def removeLeadingDollarSign(df: DataFrame, columnNames: Array[String]) = {
     var newDf = df
@@ -53,44 +68,70 @@ object SimpleApp {
     newDf
   }
 
+  // Joining dataframes based on zipcode
+  def joinOnZipCode(df1: DataFrame, df2: DataFrame): Unit =
+  {
+    val joinedDf = df1.join(
+    df2, df1("ProviderZipCode") === df2("RegionName"), "inner")
+
+    joinedDf.show()
+
+    val finalDf=joinedDf.select("DRGDefinition", "ProviderZipCode", "AverageTotalPayments","2011-12")
+
+    finalDf.show()
+
+    //finalDf.printSchema()
+
+    calculateStats(finalDf) // calling all other methods from here
+
+  }
+
 
   val doubleToLabel = udf((money: Double) => {
     (money.toInt - (money.toInt % 100)).toString
   })
 
 
+// Classification
+
   def predictAverageTotalPayments(origDf: DataFrame) = {
     // We want to predict AverageTotalPayments as a function of DRGDefinition, and ProviderZipCode
-    origDf.select("DRGDefinition", "ProviderZipCode", "AverageCoveredCharges",
-      "AverageTotalPayments", "AverageMedicarePayments").take(10)
-      .foreach(v => println("ROW: " + v))
+
 
     // We will use AverageTotalPayments as the label
+
     val df = origDf.withColumn("paymentLabel", doubleToLabel(origDf("AverageTotalPayments")))
 
     val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition").setOutputCol("feature1")
+
     val df_feature1 = feature1Indexer.fit(df).transform(df)
 
-    val feature2Indexer = new StringIndexer().setInputCol("ProviderZipCode")
-      .setOutputCol("feature2")
+    val feature2Indexer = new StringIndexer().setInputCol("ProviderZipCode").setOutputCol("feature2")
+
     val df_feature2 = feature2Indexer.fit(df_feature1).transform(df_feature1)
 
+    val feature3Indexer= new StringIndexer().setInputCol("2011-12").setOutputCol("feature3")
+
+    val df_feature3 = feature3Indexer.fit(df_feature2).transform(df_feature2)
+
     val assembler = new VectorAssembler().setInputCols(Array("feature1",
-      "feature2")).setOutputCol("features")
-    val df2 = assembler.transform(df_feature2)
+      "feature2","feature3")).setOutputCol("features")
+
+    val df2 = assembler.transform(df_feature3)
 
     val labelIndexer = new StringIndexer().setInputCol("paymentLabel").setOutputCol("label")
-    val labelIndexerModel = labelIndexer.fit(df2)
-    val df3 = labelIndexer.fit(df2).transform(df2)
 
-    df3.createOrReplaceTempView("df3")
-    df_feature1.sparkSession.sql("SELECT COUNT(DISTINCT feature2) FROM df3").show(10000)
+    val labelIndexerModel = labelIndexer.fit(df2)
+
+    val df3 = labelIndexer.fit(df2).transform(df2)
 
     df3.show(10)
     df3.printSchema()
 
     val splitSeed = 5043
     val Array(trainingData, testData) = df3.randomSplit(Array(0.7, 0.3), splitSeed)
+
+
 
     //Random Forest Classifier
 
@@ -101,32 +142,32 @@ object SimpleApp {
       .setFeatureSubsetStrategy("auto")
       .setMaxBins(100000)
       .setSeed(5043)
+
     val model = classifier.fit(trainingData)
-    println("model: " + model.toDebugString)
+    println("Random Forest Classifier model: " + model.toDebugString)
     println("model.featureImportances: " + model.featureImportances)
-    model.trees.foreach(tree => println("TREE: " + tree.toDebugString))
+    //model.trees.foreach(tree => println("TREE: " + tree.toDebugString))
 
     val predictions = model.transform(testData)
-    predictions.select("DRGDefinition", "ProviderZipCode", "AverageCoveredCharges",
-      "AverageTotalPayments", "AverageMedicarePayments", "label", "prediction").show(5)
-
-
+    predictions.select("DRGDefinition", "ProviderZipCode","2011-12",
+      "AverageTotalPayments","label", "prediction").show(5)
 
     val evaluator = new MulticlassClassificationEvaluator()
       .setLabelCol("label")
       .setPredictionCol("prediction")
       .setMetricName("accuracy")
+
     val accuracy = evaluator.evaluate(predictions)
-    println("accuracy: " + accuracy)
+    println("Random Forest Classifier Accuracy: " + accuracy)
 
     val converter = new IndexToString().setInputCol("prediction")
       .setOutputCol("originalValue")
       .setLabels(labelIndexerModel.labels)
     val df4 = converter.transform(predictions)
 
-    df4.select("DRGDefinition", "ProviderZipCode", "AverageCoveredCharges",
-      "AverageTotalPayments", "AverageMedicarePayments", "label", "prediction",
-      "originalValue").show(5)
+    //df4.select("DRGDefinition", "ProviderZipCode", "2011-12",
+     // "AverageTotalPayments", "label", "prediction",
+      //"originalValue").show(5)
 
     //Naive Bayes Classifier
 
@@ -145,22 +186,27 @@ object SimpleApp {
       .setMetricName("accuracy")
 
     val accuracy_naiveBayes = evaluator_naiveBayes.evaluate(predictions_naiveBayes)
-    println("Test set accuracy = " + accuracy_naiveBayes)
+    println("Naive Bayes Classifier Accuracy = " + accuracy_naiveBayes)
 
     val converter_naiveBayes = new IndexToString().setInputCol("prediction")
       .setOutputCol("originalValue")
       .setLabels(labelIndexerModel.labels)
+
     val df5 = converter_naiveBayes.transform(predictions_naiveBayes)
 
-    df5.select("DRGDefinition", "ProviderZipCode", "AverageCoveredCharges",
-      "AverageTotalPayments", "AverageMedicarePayments", "label", "prediction",
-      "originalValue").show(5)
+    df5.show()
+
+    //df5.select("DRGDefinition", "ProviderZipCode","2012-11",
+      //"AverageTotalPayments", "label", "prediction",
+      //"originalValue").show(5)
 
   }
+
 
   val toDouble = udf((str: String) => {
     str.toDouble
   })
+
 
   //Regression
 
@@ -169,20 +215,21 @@ object SimpleApp {
     // We will use AverageTotalPayments as the label
 
     val df = origDf.withColumn("label", origDf("AverageTotalPayments"))
-      .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+      .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode"))).withColumn("MedianHousePrice",toDouble(origDf("2011-12")))
 
     val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
       .setOutputCol("feature1")
     val df_feature1 = feature1Indexer.fit(df).transform(df)
 
     val assembler = new VectorAssembler().setInputCols(Array("feature1",
-      "ProviderZipCodeDouble")).setOutputCol("features")
+      "ProviderZipCodeDouble","MedianHousePrice")).setOutputCol("features")
     val df2 = assembler.transform(df_feature1)
+
 
     val splitSeed = 5043
     val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
 
-    // Random Forest Classifier
+    // Random Forest Regresser
 
     val classifier = new RandomForestRegressor()
       .setImpurity("variance")
@@ -193,25 +240,25 @@ object SimpleApp {
       .setSeed(5043)
 
     val model = classifier.fit(trainingData)
-    println("model: " + model.toDebugString) //?
+    println("Random Forest Regresser model: " + model.toDebugString) //?
     println("model.featureImportances: " + model.featureImportances)
 
     val predictions = model.transform(testData)
-    predictions.select("DRGDefinition", "ProviderZipCode",
-      "AverageTotalPayments", "label", "prediction").show(50)
+    predictions.select("DRGDefinition", "ProviderZipCode","MedianHousePrice",
+      "AverageTotalPayments","label", "prediction").show(50)
 
     val evaluator = new RegressionEvaluator()
       .setLabelCol("label")
       .setPredictionCol("prediction")
       .setMetricName("r2")
     val accuracy = evaluator.evaluate(predictions)
-    println("r2: " + accuracy)
+    println("Random Forest Regresser Accuracy: " + accuracy)
 
 
     // Generalized Linear Regression
 
 
-    for (a <- 1 to  10 )
+    for (a <- 1 to  3 )
         {
           // Family: Gaussian
 
@@ -227,7 +274,7 @@ object SimpleApp {
 
           // Apply the model on testData
           val predictions_glr = model_glr.transform(testData)
-          predictions_glr.select("DRGDefinition", "ProviderZipCode",
+          predictions_glr.select("DRGDefinition", "ProviderZipCode","MedianHousePrice",
           "AverageTotalPayments", "label", "prediction").show(5)
 
           val evaluator_glr = new RegressionEvaluator()
@@ -236,8 +283,8 @@ object SimpleApp {
           .setMetricName("r2")
 
           val accuracy_glr = evaluator_glr.evaluate(predictions_glr)
-          println("Family Gaussian Iteration No: " + a)
-          println("Accuracy Gaussian Family: " + accuracy_glr)
+          println("GLR Family Gaussian Iteration No: " + a)
+          println("Accuracy GLR Gaussian Family: " + accuracy_glr)
 
           //Family: Gamma
 
@@ -253,7 +300,7 @@ object SimpleApp {
 
           // Apply the model on testData
           val predictions_glr2 = model_glr2.transform(testData)
-          predictions_glr2.select("DRGDefinition", "ProviderZipCode",
+          predictions_glr2.select("DRGDefinition", "ProviderZipCode","MedianHousePrice",
             "AverageTotalPayments", "label", "prediction").show(5)
 
           val evaluator_glr2 = new RegressionEvaluator()
@@ -263,47 +310,38 @@ object SimpleApp {
 
           val accuracy_glr2 = evaluator_glr2.evaluate(predictions_glr)
 
-          println("Family Gamma Iteration No: " + a)
-          println("Accuracy Gamma Family: " + accuracy_glr2)
+          println("GLR Family Gamma Iteration No: " + a)
+          println("GLR Accuracy Gamma Family: " + accuracy_glr2)
         }
 
-
-
-
   }
+
 
   // K- Means Clustering
 
   def applyKmeans(origDf: DataFrame) = {
 
-    origDf.createOrReplaceTempView("payments")
-    origDf.sparkSession.sql("SELECT DRGDefinition, MIN(AverageTotalPayments)," +
-      " AVG(AverageTotalPayments), MAX(AverageTotalPayments) " +
-      "FROM payments GROUP BY DRGDefinition ORDER BY AVG(AverageTotalPayments)")
-      .show(10000, false)
-
-    origDf.sparkSession.sql("SELECT ProviderZipCode, MIN(AverageTotalPayments)," +
-      " AVG(AverageTotalPayments), MAX(AverageTotalPayments) " +
-      "FROM payments GROUP BY ProviderZipCode ORDER BY AVG(AverageTotalPayments)")
-      .show(100, false)
 
     // We want to predict AverageTotalPayments as a function of DRGDefinition, and ProviderZipCode
-    origDf.select("DRGDefinition", "ProviderZipCode", "AverageTotalPayments").take(10)
-      .foreach(v => println("ROW: " + v))
 
-    val df = origDf // .withColumn("label", origDf("AverageTotalPayments"))
-      .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+    origDf.show()
+
+
+    val df = origDf.withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+      .withColumn("MedianHousePrice",toDouble(origDf("2011-12")))
 
     val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
       .setOutputCol("feature1")
+
     val df_feature1 = feature1Indexer.fit(df).transform(df)
 
     val assembler = new VectorAssembler().setInputCols(Array("feature1",
-      "ProviderZipCodeDouble", "AverageTotalPayments")).setOutputCol("features")
+      "ProviderZipCodeDouble","MedianHousePrice")).setOutputCol("features")
     val df2 = assembler.transform(df_feature1)
 
     val splitSeed = 5043
     val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
+
 
     val kmeans = new KMeans().setK(2).setSeed(1L)
     val model = kmeans.fit(trainingData)
@@ -357,4 +395,6 @@ object SimpleApp {
     predictAverageTotalPaymentsUsingRegression(df)
 
   }
+
+
 }
