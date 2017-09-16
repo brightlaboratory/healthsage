@@ -33,12 +33,14 @@ object SimpleApp {
 
     //Reading Zip_MedianValuePerSqft_AllHomes.csv
 
+
     val priceDf = spark.read
       .option("header", "true") //reading the headers
-      .csv(getClass.getClassLoader.getResource("prices.csv").getPath)
+      .csv(getClass.getClassLoader.getResource("Zip_MedianValuePerSqft_AllHomes.csv").getPath)
     //calculatesStats2(priceDf)
 
-    joinOnZipCode(paymentDf,priceDf)
+    import spark.implicits._
+    joinOnZipCode(paymentDf,priceDf.where($"2011-12" isNotNull))
 
 
   }
@@ -71,10 +73,13 @@ object SimpleApp {
   // Joining dataframes based on zipcode
   def joinOnZipCode(df1: DataFrame, df2: DataFrame): Unit =
   {
+    println("df1.count(): " + df1.count())
     val joinedDf = df1.join(
     df2, df1("ProviderZipCode") === df2("RegionName"), "inner")
 
-    joinedDf.show()
+    println("joinedDf.count(): " + joinedDf.count())
+//    System.exit(0)
+    //joinedDf.show()
 
     val finalDf=joinedDf.select("DRGDefinition", "ProviderZipCode", "AverageTotalPayments","2011-12")
 
