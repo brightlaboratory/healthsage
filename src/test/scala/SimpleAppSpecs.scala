@@ -1,5 +1,6 @@
 
-import org.apache.spark.sql.{SQLContext, SparkSession}
+import org.apache.log4j.{Level, Logger}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.{SparkConf, SparkContext}
 import org.scalatest.{BeforeAndAfter, FlatSpec}
 
@@ -21,6 +22,9 @@ class SimpleAppSpecs extends FlatSpec with BeforeAndAfter {
       master(master)
       .appName("spark session example")
       .getOrCreate()
+
+    val rootLogger = Logger.getRootLogger()
+    rootLogger.setLevel(Level.ERROR)
   }
 
   after {
@@ -29,11 +33,8 @@ class SimpleAppSpecs extends FlatSpec with BeforeAndAfter {
     }
   }
 
-  "This test" should "count words" in {
-    SimpleApp.countWords(sc)
-  }
 
-  "csvToDf" should "construct DF" in {
-    SimpleApp.csvToDf(sparkSession)
+  "predictPrices" should "predict medical prices" in {
+    SimpleApp.predictPrices(sparkSession)
   }
 }
