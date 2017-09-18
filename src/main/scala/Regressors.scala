@@ -71,8 +71,8 @@ object Regressors {
     println("df.count(): " + df.count())
     df.printSchema()
 
-//    df.createOrReplaceTempView("data")
-//    df.sparkSession.sql("SELECT COUNT(DISTINCT ProviderId) FROM data").show(false)
+    df.createOrReplaceTempView("data")
+    df.sparkSession.sql("SELECT MIN(AverageTotalPayments), AVG(AverageTotalPayments), MAX(AverageTotalPayments) FROM data").show(false)
 
 //    val assembler = new VectorAssembler().setInputCols(Array(
 //      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice")).setOutputCol("features")
