@@ -71,8 +71,14 @@ object Regressors {
     println("df.count(): " + df.count())
     df.printSchema()
 
+//    df.createOrReplaceTempView("data")
+//    df.sparkSession.sql("SELECT COUNT(DISTINCT ProviderId) FROM data").show(false)
+
+//    val assembler = new VectorAssembler().setInputCols(Array(
+//      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice")).setOutputCol("features")
+
     val assembler = new VectorAssembler().setInputCols(Array(
-      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice")).setOutputCol("features")
+      "ProviderZipCodeDouble", "MedianHousePrice")).setOutputCol("features")
 
     val df2 = assembler.transform(df)
 

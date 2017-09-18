@@ -24,7 +24,7 @@ object SimpleApp {
 
     import spark.implicits._
     val joinedDf = joinOnZipCode(paymentDf, priceDf.where($"2015-12" isNotNull))
-      .select("DRGDefinition", "ProviderZipCode", "TotalDischarges", "2015-12", "AverageTotalPayments")
+      .select("DRGDefinition", "ProviderId", "ProviderZipCode", "TotalDischarges", "2015-12", "AverageTotalPayments")
 
     applyMachineLearningAlgorithms(joinedDf)
   }
@@ -75,9 +75,8 @@ object SimpleApp {
     //    ClusteringAlgorithm.applyKmeans(df)
     //    Classifiers.applyNaiveBayesClassifier(df)
 //    Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
-//    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
-    df.printSchema()
-    StatisticsComputer.computeStatsOnPaymentData(df)
+    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
+//    StatisticsComputer.computeStatsOnPaymentData(df)
     //    Regressors.applyGeneralizedLinearRegression(df, "gaussian")
     //    Regressors.applyGeneralizedLinearRegression(df, "Gamma")
   }
