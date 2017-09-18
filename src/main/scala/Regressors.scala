@@ -1,7 +1,7 @@
 import SimpleApp.toDouble
 import org.apache.spark.ml.evaluation.RegressionEvaluator
 import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
-import org.apache.spark.ml.regression.{GeneralizedLinearRegression, RandomForestRegressor}
+import org.apache.spark.ml.regression.{GeneralizedLinearRegression, LinearRegression, RandomForestRegressor}
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions.{avg, max, min, udf}
 
@@ -185,5 +185,48 @@ object Regressors {
 
     val accuracy_glr = evaluator_glr.evaluate(predictions_glr)
     println("Accuracy GLR Gaussian Family: " + accuracy_glr)
+  }
+
+  //Linear Regression
+
+  def applyLinearRegression(origDf: DataFrame) = {
+
+
+    val df = origDf.withColumn("label", origDf("AverageTotalPayments"))
+      .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+      .withColumn("MedianHousePrice", toDouble(origDf("2015-12")))
+
+    val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
+      .setOutputCol("feature1")
+    val df_feature1 = feature1Indexer.fit(df).transform(df)
+
+    val assembler = new VectorAssembler().setInputCols(Array("feature1",
+      "ProviderZipCodeDouble", "MedianHousePrice")).setOutputCol("features")
+    val df2 = assembler.transform(df_feature1)
+
+    val splitSeed = 5043
+    val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
+
+    val lr = new LinearRegression()
+      .setMaxIter(10)
+      .setRegParam(0.3)
+      .setElasticNetParam(0.8)
+
+    // Fit the model
+    val lrModel = lr.fit(trainingData)
+
+    // Apply the model on testData
+    val predictions_glr = lrModel.transform(testData)
+    predictions_glr.select("DRGDefinition", "ProviderZipCode", "MedianHousePrice",
+      "AverageTotalPayments", "label", "prediction").show(5)
+
+    val evaluator_glr = new RegressionEvaluator()
+      .setLabelCol("label")
+      .setPredictionCol("prediction")
+      .setMetricName("r2")
+
+    val accuracy_lr = evaluator_glr.evaluate(predictions_glr)
+    println("Accuracy Linear Regression: " + accuracy_lr)
+
   }
 }
