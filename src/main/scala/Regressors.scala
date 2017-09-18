@@ -3,6 +3,7 @@ import org.apache.spark.ml.evaluation.RegressionEvaluator
 import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
 import org.apache.spark.ml.regression.{GeneralizedLinearRegression, RandomForestRegressor}
 import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.functions.{avg, max, min, udf}
 
 object Regressors {
   //Regression
@@ -60,17 +61,19 @@ object Regressors {
 
     // We will use AverageTotalPayments as the label
 
-    val df = origDf
-      .where(origDf("DRGDefinition").startsWith("191"))
+    val df = addNumberOfDRGsforProviderAsColumn(origDf)
+      .where(origDf("DRGDefinition").startsWith("871"))
       .withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+      .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")) )
       .withColumn("MedianHousePrice", toDouble(origDf("2015-12")))
 
     println("df.count(): " + df.count())
-
+    df.printSchema()
 
     val assembler = new VectorAssembler().setInputCols(Array(
-      "ProviderZipCodeDouble", "MedianHousePrice")).setOutputCol("features")
+      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice")).setOutputCol("features")
+
     val df2 = assembler.transform(df)
 
     val splitSeed = 5043
@@ -90,8 +93,8 @@ object Regressors {
     println("model.featureImportances: " + model.featureImportances)
 
     val predictions = model.transform(testData)
-    predictions.select("DRGDefinition", "ProviderZipCode", "MedianHousePrice",
-      "AverageTotalPayments", "label", "prediction").show(5)
+    predictions.select("DRGDefinition", "ProviderZipCode", "TotalDischarges", "MedianHousePrice",
+      "AverageTotalPayments", "label", "prediction").show(5, false)
 
     val evaluator = new RegressionEvaluator()
       .setLabelCol("label")
@@ -99,6 +102,37 @@ object Regressors {
       .setMetricName("r2")
     val accuracy = evaluator.evaluate(predictions)
     println("Random Forest Regresser Accuracy: " + accuracy)
+
+    val predictionWithErrors = computeError(predictions)
+    displayError(predictionWithErrors)
+  }
+
+
+  val difference = udf((label: Double, prediction: Double) => {
+    Math.abs(label - prediction)
+  })
+
+
+  val percentDifference = udf((label: Double, prediction: Double) => {
+    Math.abs(label - prediction) / Math.abs(label)
+  })
+
+  def computeError(df: DataFrame) = {
+    df.withColumn("Difference", difference(df("label"), df("prediction")))
+      .withColumn("PercentDifference", percentDifference(df("label"), df("prediction")))
+  }
+
+  def displayError(df: DataFrame) = {
+    import df.sparkSession.implicits._
+    println("The difference between label and prediction")
+    df.select(min($"Difference"), avg($"Difference"), max($"Difference")).show(false)
+    df.select(min($"PercentDifference"), avg($"PercentDifference"), max($"PercentDifference")).show(false)
+  }
+
+  def addNumberOfDRGsforProviderAsColumn(df: DataFrame) = {
+    // TODO: Add the number of types of DRGDefinition associated with the ProviderId as a column
+
+    df
   }
 
   // family can be: gaussian, Gamma
