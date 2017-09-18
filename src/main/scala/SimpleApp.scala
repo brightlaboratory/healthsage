@@ -75,7 +75,9 @@ object SimpleApp {
     //    ClusteringAlgorithm.applyKmeans(df)
     //    Classifiers.applyNaiveBayesClassifier(df)
 //    Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
-    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
+//    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
+    df.printSchema()
+    StatisticsComputer.computeStatsOnPaymentData(df)
     //    Regressors.applyGeneralizedLinearRegression(df, "gaussian")
     //    Regressors.applyGeneralizedLinearRegression(df, "Gamma")
   }
