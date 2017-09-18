@@ -10,7 +10,7 @@ object SimpleApp {
     //Reading medicare_payment_2011.csv
     val orig_df = spark.read
       .option("header", "true") //reading the headers
-      .csv(getClass.getClassLoader.getResource("medicare_payment_2011.csv").getPath)
+      .csv(getClass.getClassLoader.getResource("Inpatient_Prospective_Payment_System__IPPS__Provider_Summary_for_All_Diagnosis-Related_Groups__DRG__-_FY2015.csv").getPath)
 
     val dollarColumns = Array("AverageCoveredCharges", "AverageTotalPayments",
       "AverageMedicarePayments")
@@ -23,8 +23,8 @@ object SimpleApp {
       .csv(getClass.getClassLoader.getResource("Zip_MedianValuePerSqft_AllHomes.csv").getPath)
 
     import spark.implicits._
-    val joinedDf = joinOnZipCode(paymentDf, priceDf.where($"2011-12" isNotNull))
-      .select("DRGDefinition", "ProviderZipCode", "2011-12", "AverageTotalPayments")
+    val joinedDf = joinOnZipCode(paymentDf, priceDf.where($"2015-12" isNotNull))
+      .select("DRGDefinition", "ProviderZipCode", "2015-12", "AverageTotalPayments")
 
     applyMachineLearningAlgorithms(joinedDf)
   }
@@ -56,7 +56,6 @@ object SimpleApp {
 
   // Joining dataframes based on zipcode
   def joinOnZipCode(df1: DataFrame, df2: DataFrame) = {
-    println("df1.count(): " + df1.count())
     val joinedDf = df1.join(
       df2, df1("ProviderZipCode") === df2("RegionName"), "inner")
     joinedDf
@@ -76,6 +75,7 @@ object SimpleApp {
     //    ClusteringAlgorithm.applyKmeans(df)
     //    Classifiers.applyNaiveBayesClassifier(df)
     Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
+//    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
     //    Regressors.applyGeneralizedLinearRegression(df, "gaussian")
     //    Regressors.applyGeneralizedLinearRegression(df, "Gamma")
   }

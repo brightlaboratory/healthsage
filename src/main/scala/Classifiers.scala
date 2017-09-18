@@ -23,7 +23,7 @@ object Classifiers {
 
     val df_feature2 = feature2Indexer.fit(df_feature1).transform(df_feature1)
 
-    val feature3Indexer = new StringIndexer().setInputCol("2011-12").setOutputCol("feature3")
+    val feature3Indexer = new StringIndexer().setInputCol("2015-12").setOutputCol("feature3")
 
     val df_feature3 = feature3Indexer.fit(df_feature2).transform(df_feature2)
 
@@ -61,7 +61,7 @@ object Classifiers {
     //model.trees.foreach(tree => println("TREE: " + tree.toDebugString))
 
     val predictions = model.transform(testData)
-    predictions.select("DRGDefinition", "ProviderZipCode", "2011-12",
+    predictions.select("DRGDefinition", "ProviderZipCode", "2015-12",
       "AverageTotalPayments", "label", "prediction").show(5)
 
     val evaluator = new MulticlassClassificationEvaluator()
@@ -77,7 +77,7 @@ object Classifiers {
       .setLabels(labelIndexerModel.labels)
     val df4 = converter.transform(predictions)
 
-    df4.select("DRGDefinition", "ProviderZipCode", "2011-12",
+    df4.select("DRGDefinition", "ProviderZipCode", "2015-12",
       "AverageTotalPayments", "label", "prediction",
       "originalValue").show(5)
   }
@@ -93,7 +93,7 @@ object Classifiers {
 
     val df_feature2 = feature2Indexer.fit(df_feature1).transform(df_feature1)
 
-    val feature3Indexer = new StringIndexer().setInputCol("2011-12").setOutputCol("feature3")
+    val feature3Indexer = new StringIndexer().setInputCol("2015-12").setOutputCol("feature3")
 
     val df_feature3 = feature3Indexer.fit(df_feature2).transform(df_feature2)
 

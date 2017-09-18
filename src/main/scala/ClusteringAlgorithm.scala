@@ -14,7 +14,7 @@ object ClusteringAlgorithm {
 
     origDf.show()
     val df = origDf.withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
-      .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+      .withColumn("MedianHousePrice", toDouble(origDf("2015-12")))
 
     val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
       .setOutputCol("feature1")
