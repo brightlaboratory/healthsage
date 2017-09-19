@@ -11,7 +11,7 @@ object Regressors {
 
     // We will use AverageTotalPayments as the label
 
-    val df = origDf.withColumn("label", origDf("AverageTotalPayments"))
+   /* val df = origDf.withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
       .withColumn("MedianHousePrice", toDouble(origDf("2015-12")))
 
@@ -21,12 +21,27 @@ object Regressors {
 
     val assembler = new VectorAssembler().setInputCols(Array("feature1",
       "ProviderZipCodeDouble", "MedianHousePrice")).setOutputCol("features")
-    val df2 = assembler.transform(df_feature1)
+    val df2 = assembler.transform(df_feature1)*/
 
 //    df2.createOrReplaceTempView("data")
 //    df2.sparkSession.sql("SELECT DRGDefinition, COUNT(*) FROM data GROUP BY DRGDefinition ORDER BY COUNT(*)")
 //      .coalesce(1).write.option("header", "true").csv("sample_file.csv")
 
+
+    // Using count(DISTINCT DRGDefinition) as a feature
+
+    val df = origDf.withColumn("label", origDf("AverageTotalPayments"))
+        .withColumn("count DRGDefinition", origDf("count(DISTINCT DRGDefinition)"))
+      .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+      .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+
+    val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
+      .setOutputCol("feature1")
+    val df_feature1 = feature1Indexer.fit(df).transform(df)
+
+    val assembler = new VectorAssembler().setInputCols(Array("feature1",
+      "ProviderZipCodeDouble", "MedianHousePrice")).setOutputCol("features")
+    val df2 = assembler.transform(df_feature1)
 
     val splitSeed = 5043
     val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
@@ -46,7 +61,7 @@ object Regressors {
     println("model.featureImportances: " + model.featureImportances)
 
     val predictions = model.transform(testData)
-    predictions.select("DRGDefinition", "ProviderZipCode", "MedianHousePrice",
+    predictions.select("DRGDefinition", "ProviderZipCode", "MedianHousePrice","count DRGDefinition",
       "AverageTotalPayments", "label", "prediction").show(50)
 
     val evaluator = new RegressionEvaluator()
@@ -57,16 +72,20 @@ object Regressors {
     println("Random Forest Regresser Accuracy: " + accuracy)
   }
 
+
+
   def applyRandomForestRegressionOnEachDRGSeparately(origDf: DataFrame) = {
 
     // We will use AverageTotalPayments as the label
+
+
 
     val df = addNumberOfDRGsforProviderAsColumn(origDf)
       .where(origDf("DRGDefinition").startsWith("871"))
       .withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
       .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")) )
-      .withColumn("MedianHousePrice", toDouble(origDf("2015-12")))
+      .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
 
     println("df.count(): " + df.count())
     df.printSchema()
@@ -78,7 +97,7 @@ object Regressors {
 //      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice")).setOutputCol("features")
 
     val assembler = new VectorAssembler().setInputCols(Array(
-      "ProviderZipCodeDouble", "MedianHousePrice")).setOutputCol("features")
+      "ProviderZipCodeDouble", "MedianHousePrice","count(DISTINCT DRGDefinition)")).setOutputCol("features")
 
     val df2 = assembler.transform(df)
 
@@ -138,7 +157,20 @@ object Regressors {
   def addNumberOfDRGsforProviderAsColumn(df: DataFrame) = {
     // TODO: Add the number of types of DRGDefinition associated with the ProviderId as a column
 
-    df
+    df.createOrReplaceTempView("JoinedView")
+    val groupedDf=df.sparkSession.sql("SELECT ProviderId,"+ "COUNT(DISTINCT DRGDefinition)" +
+      "FROM JoinedView GROUP BY ProviderId ")
+
+    val finalDF = df.join(
+      groupedDf, df("ProviderId") === groupedDf("ProviderId"), "inner")
+
+    finalDF.show()
+    finalDF.printSchema()
+    predictAverageTotalPaymentsUsingRandomForestRegression(finalDF)
+    applyLinearRegression(finalDF)
+
+    finalDF
+
   }
 
   // family can be: gaussian, Gamma
@@ -191,7 +223,7 @@ object Regressors {
 
   def applyLinearRegression(origDf: DataFrame) = {
 
-
+   /*
     val df = origDf.withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
       .withColumn("MedianHousePrice", toDouble(origDf("2015-12")))
@@ -202,7 +234,23 @@ object Regressors {
 
     val assembler = new VectorAssembler().setInputCols(Array("feature1",
       "ProviderZipCodeDouble", "MedianHousePrice")).setOutputCol("features")
+    val df2 = assembler.transform(df_feature1)*/
+
+    // Using count(DISTINCT DRGDefinition) as a feature
+
+    val df = origDf.withColumn("label", origDf("AverageTotalPayments"))
+      .withColumn("count DRGDefinition", origDf("count(DISTINCT DRGDefinition)"))
+      .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+      .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+
+    val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
+      .setOutputCol("feature1")
+    val df_feature1 = feature1Indexer.fit(df).transform(df)
+
+    val assembler = new VectorAssembler().setInputCols(Array("feature1",
+      "ProviderZipCodeDouble", "MedianHousePrice")).setOutputCol("features")
     val df2 = assembler.transform(df_feature1)
+
 
     val splitSeed = 5043
     val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
@@ -217,7 +265,7 @@ object Regressors {
 
     // Apply the model on testData
     val predictions_glr = lrModel.transform(testData)
-    predictions_glr.select("DRGDefinition", "ProviderZipCode", "MedianHousePrice",
+    predictions_glr.select("DRGDefinition", "count DRGDefinition","ProviderZipCode", "MedianHousePrice",
       "AverageTotalPayments", "label", "prediction").show(5)
 
     val evaluator_glr = new RegressionEvaluator()

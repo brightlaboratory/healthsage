@@ -1,5 +1,6 @@
 /* SimpleApp.scala */
 
+import Regressors._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
@@ -7,7 +8,7 @@ object SimpleApp {
 
   def predictPrices(spark: SparkSession) = {
 
-    //Reading medicare_payment_2011.csv
+    //Reading Inpatient_prospective_Payment_2015
     val orig_df = spark.read
       .option("header", "true") //reading the headers
       .csv(getClass.getClassLoader.getResource("Inpatient_Prospective_Payment_System__IPPS__Provider_Summary_for_All_Diagnosis-Related_Groups__DRG__-_FY2015.csv").getPath)
@@ -16,6 +17,15 @@ object SimpleApp {
       "AverageMedicarePayments")
     val paymentDf = removeLeadingDollarSign(normalizeHeaders(orig_df), dollarColumns)
 
+    //Reading medicare_payment_2011.csv
+
+    val orig_df2 = spark.read
+      .option("header", "true") //reading the headers
+      .csv(getClass.getClassLoader.getResource("medicare_payment_2011.csv").getPath)
+
+    val dollarColumns2 = Array("AverageCoveredCharges", "AverageTotalPayments",
+      "AverageMedicarePayments")
+    val paymentDf2 = removeLeadingDollarSign(normalizeHeaders(orig_df), dollarColumns2)
 
     //Reading Zip_MedianValuePerSqft_AllHomes.csv
     val priceDf = spark.read
@@ -23,10 +33,18 @@ object SimpleApp {
       .csv(getClass.getClassLoader.getResource("Zip_MedianValuePerSqft_AllHomes.csv").getPath)
 
     import spark.implicits._
-    val joinedDf = joinOnZipCode(paymentDf, priceDf.where($"2015-12" isNotNull))
-      .select("DRGDefinition", "ProviderId", "ProviderZipCode", "TotalDischarges", "2015-12", "AverageTotalPayments")
 
-    applyMachineLearningAlgorithms(joinedDf)
+    val joinedDf2=joinOnZipCode(paymentDf2,priceDf.where($"2011-12" isNotNull)).
+      select("DRGDefinition", "ProviderId", "ProviderZipCode", "TotalDischarges", "2011-12", "AverageTotalPayments")
+
+    joinedDf2.show()
+
+
+    //val joinedDf = joinOnZipCode(paymentDf, priceDf.where($"2015-12" isNotNull))
+     // .select("DRGDefinition", "ProviderId", "ProviderZipCode", "TotalDischarges", "2015-12", "AverageTotalPayments")
+
+    Regressors.addNumberOfDRGsforProviderAsColumn(joinedDf2)
+    //applyMachineLearningAlgorithms(joinedDf)
   }
 
 
@@ -74,8 +92,8 @@ object SimpleApp {
   def applyMachineLearningAlgorithms(df: DataFrame): Unit = {
     //    ClusteringAlgorithm.applyKmeans(df)
     //    Classifiers.applyNaiveBayesClassifier(df)
-//    Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
-    //Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
+/// Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
+    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
     //Regressors.applyLinearRegression(df)
 //    StatisticsComputer.computeStatsOnPaymentData(df)
     //    Regressors.applyGeneralizedLinearRegression(df, "gaussian")
