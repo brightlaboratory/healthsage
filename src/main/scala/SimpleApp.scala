@@ -43,8 +43,8 @@ object SimpleApp {
     //val joinedDf = joinOnZipCode(paymentDf, priceDf.where($"2015-12" isNotNull))
      // .select("DRGDefinition", "ProviderId", "ProviderZipCode", "TotalDischarges", "2015-12", "AverageTotalPayments")
 
-    Regressors.addNumberOfDRGsforProviderAsColumn(joinedDf2)
-    //applyMachineLearningAlgorithms(joinedDf)
+
+    applyMachineLearningAlgorithms(joinedDf2)
   }
 
 
@@ -92,11 +92,15 @@ object SimpleApp {
   def applyMachineLearningAlgorithms(df: DataFrame): Unit = {
     //    ClusteringAlgorithm.applyKmeans(df)
     //    Classifiers.applyNaiveBayesClassifier(df)
-/// Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
-    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
+    //Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
+
+    Regressors.predictAverageTotalPaymentsUsingGBT(df)
+    //Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
     //Regressors.applyLinearRegression(df)
 //    StatisticsComputer.computeStatsOnPaymentData(df)
     //    Regressors.applyGeneralizedLinearRegression(df, "gaussian")
     //    Regressors.applyGeneralizedLinearRegression(df, "Gamma")
+
+    //Regressors.addNumberOfDRGsforProviderAsColumn(df)
   }
 }

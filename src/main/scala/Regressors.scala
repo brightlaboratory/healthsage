@@ -4,6 +4,7 @@ import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
 import org.apache.spark.ml.regression.{GeneralizedLinearRegression, LinearRegression, RandomForestRegressor}
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions.{avg, max, min, udf}
+import org.apache.spark.ml.regression.{GBTRegressionModel, GBTRegressor}
 
 object Regressors {
   //Regression
@@ -30,9 +31,10 @@ object Regressors {
 
     // Using count(DISTINCT DRGDefinition) as a feature
 
-    val df = origDf.withColumn("label", origDf("AverageTotalPayments"))
-        .withColumn("count DRGDefinition", origDf("count(DISTINCT DRGDefinition)"))
+    val df = addNumberOfDRGsforProviderAsColumn(origDf)
+      .withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+      .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")) )
       .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
 
     val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
@@ -72,13 +74,56 @@ object Regressors {
     println("Random Forest Regresser Accuracy: " + accuracy)
   }
 
+def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
 
+  // Using count(DISTINCT DRGDefinition) as a feature
+
+  val df = addNumberOfDRGsforProviderAsColumn(origDf)
+    .withColumn("label", origDf("AverageTotalPayments"))
+    .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+    .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")) )
+    .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+
+  df.show()
+
+  val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
+    .setOutputCol("feature1")
+  val df_feature1 = feature1Indexer.fit(df).transform(df)
+
+  val assembler = new VectorAssembler().setInputCols(Array("feature1",
+    "ProviderZipCodeDouble", "MedianHousePrice","count(DISTINCT DRGDefinition)")).setOutputCol("features")
+  val df2 = assembler.transform(df_feature1)
+
+  val splitSeed = 5043
+  val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
+
+  val gbt = new GBTRegressor()
+    .setLabelCol("label")
+    .setFeaturesCol("features")
+    .setMaxIter(10)
+    .setImpurity("variance")
+    .setMaxDepth(8)
+    .setMaxBins(1000)
+    .setSeed(5043)
+
+  val model = gbt.fit(trainingData)
+  val predictions = model.transform(testData)
+  predictions.select("prediction", "label", "features").show(5)
+
+  val evaluator = new RegressionEvaluator()
+    .setLabelCol("label")
+    .setPredictionCol("prediction")
+    .setMetricName("rmse")
+  val rmse = evaluator.evaluate(predictions)
+  println("Root Mean Squared Error (RMSE) on test data = " + rmse)
+
+
+
+}
 
   def applyRandomForestRegressionOnEachDRGSeparately(origDf: DataFrame) = {
 
     // We will use AverageTotalPayments as the label
-
-
 
     val df = addNumberOfDRGsforProviderAsColumn(origDf)
       .where(origDf("DRGDefinition").startsWith("871"))
@@ -118,7 +163,7 @@ object Regressors {
     println("model.featureImportances: " + model.featureImportances)
 
     val predictions = model.transform(testData)
-    predictions.select("DRGDefinition", "ProviderZipCode", "TotalDischarges", "MedianHousePrice",
+    predictions.select("DRGDefinition", "count(DISTINCT DRGDefinition)","ProviderZipCode", "TotalDischarges", "MedianHousePrice",
       "AverageTotalPayments", "label", "prediction").show(5, false)
 
     val evaluator = new RegressionEvaluator()
@@ -126,7 +171,7 @@ object Regressors {
       .setPredictionCol("prediction")
       .setMetricName("r2")
     val accuracy = evaluator.evaluate(predictions)
-    println("Random Forest Regresser Accuracy: " + accuracy)
+    println("Random Forest Regresser Accuracy on each drug seperately: " + accuracy)
 
     val predictionWithErrors = computeError(predictions)
     displayError(predictionWithErrors)
@@ -166,8 +211,6 @@ object Regressors {
 
     finalDF.show()
     finalDF.printSchema()
-    predictAverageTotalPaymentsUsingRandomForestRegression(finalDF)
-    applyLinearRegression(finalDF)
 
     finalDF
 
@@ -238,7 +281,8 @@ object Regressors {
 
     // Using count(DISTINCT DRGDefinition) as a feature
 
-    val df = origDf.withColumn("label", origDf("AverageTotalPayments"))
+    val df = addNumberOfDRGsforProviderAsColumn(origDf)
+      .withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("count DRGDefinition", origDf("count(DISTINCT DRGDefinition)"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
       .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
@@ -248,7 +292,7 @@ object Regressors {
     val df_feature1 = feature1Indexer.fit(df).transform(df)
 
     val assembler = new VectorAssembler().setInputCols(Array("feature1",
-      "ProviderZipCodeDouble", "MedianHousePrice")).setOutputCol("features")
+      "ProviderZipCodeDouble", "MedianHousePrice","count(DISTINCT DRGDefinition)")).setOutputCol("features")
     val df2 = assembler.transform(df_feature1)
 
 
