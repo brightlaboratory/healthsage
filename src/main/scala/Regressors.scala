@@ -40,8 +40,13 @@ object Regressors {
       .setOutputCol("feature1")
     val df_feature1 = feature1Indexer.fit(df).transform(df)
 
+//    val assembler = new VectorAssembler().setInputCols(Array("feature1",
+//      "ProviderZipCodeDouble", "MedianHousePrice")).setOutputCol("features")
+
     val assembler = new VectorAssembler().setInputCols(Array("feature1",
-      "ProviderZipCodeDouble", "MedianHousePrice")).setOutputCol("features")
+      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      "count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
     val df2 = assembler.transform(df_feature1)
 
     val splitSeed = 5043
@@ -89,8 +94,13 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     .setOutputCol("feature1")
   val df_feature1 = feature1Indexer.fit(df).transform(df)
 
+//  val assembler = new VectorAssembler().setInputCols(Array("feature1",
+//    "ProviderZipCodeDouble", "MedianHousePrice","count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
   val assembler = new VectorAssembler().setInputCols(Array("feature1",
-    "ProviderZipCodeDouble", "MedianHousePrice","count(DISTINCT DRGDefinition)")).setOutputCol("features")
+    "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+    "count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
   val df2 = assembler.transform(df_feature1)
 
   val splitSeed = 5043
@@ -199,7 +209,6 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
   }
 
   def addNumberOfDRGsforProviderAsColumn(df: DataFrame) = {
-    // TODO: Add the number of types of DRGDefinition associated with the ProviderId as a column
 
     df.createOrReplaceTempView("JoinedView")
     val groupedDf=df.sparkSession.sql("SELECT ProviderId,"+ "COUNT(DISTINCT DRGDefinition)" +
@@ -290,8 +299,13 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
       .setOutputCol("feature1")
     val df_feature1 = feature1Indexer.fit(df).transform(df)
 
+//    val assembler = new VectorAssembler().setInputCols(Array("feature1",
+//      "ProviderZipCodeDouble", "MedianHousePrice","count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
     val assembler = new VectorAssembler().setInputCols(Array("feature1",
-      "ProviderZipCodeDouble", "MedianHousePrice","count(DISTINCT DRGDefinition)")).setOutputCol("features")
+      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      "count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
     val df2 = assembler.transform(df_feature1)
 
 
