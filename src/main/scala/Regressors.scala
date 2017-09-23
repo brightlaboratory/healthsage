@@ -159,7 +159,7 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
       .rdd.map(row => row.getString(0)).collect()
 
     // Here we will build a model for each DRG separately
-    val DRGErrors = distinctDRGDefinitions.take(2).map(DRG => {
+    val DRGErrors = distinctDRGDefinitions.sorted.map(DRG => {
       val subsetTrainingData = traingData.where($"DRGDefinition".startsWith(DRG))
       val subsetTestData = testData.where($"DRGDefinition".startsWith(DRG))
       val aggError = applyRandomForestRegressionCore(subsetTrainingData, subsetTestData)
@@ -168,10 +168,12 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     }
     )
 
+    // TODO: the outputFile must be different for each run or the previous output must be deleted.
+    val outputFile = "PerDRGError_Config1"
     testData.sparkSession.sparkContext.parallelize(DRGErrors)
       .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
         "MaxPercentError", "TrainRows", "TestRows")
-      .coalesce(1).write.csv("PerDRGError_Config1")
+      .coalesce(1).write.csv(outputFile)
 
   }
 
@@ -189,7 +191,7 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     //    println("Random Forest Regresser model: " + model.toDebugString)
     println("model.featureImportances: " + model.featureImportances)
 
-    val predictions = model.transform(testData)
+    val predictions = model.transform(testData).cache()
     predictions.select("DRGDefinition", "TotalDischargesDouble", "count(DISTINCT DRGDefinition)","ProviderZipCode",
       "TotalDischarges", "MedianHousePrice", "features",
       "AverageTotalPayments", "label", "prediction").show(5, truncate = false)
@@ -293,19 +295,6 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
   //Linear Regression
 
   def applyLinearRegression(origDf: DataFrame) = {
-
-   /*
-    val df = origDf.withColumn("label", origDf("AverageTotalPayments"))
-      .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
-      .withColumn("MedianHousePrice", toDouble(origDf("2015-12")))
-
-    val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
-      .setOutputCol("feature1")
-    val df_feature1 = feature1Indexer.fit(df).transform(df)
-
-    val assembler = new VectorAssembler().setInputCols(Array("feature1",
-      "ProviderZipCodeDouble", "MedianHousePrice")).setOutputCol("features")
-    val df2 = assembler.transform(df_feature1)*/
 
     // Using count(DISTINCT DRGDefinition) as a feature
 
