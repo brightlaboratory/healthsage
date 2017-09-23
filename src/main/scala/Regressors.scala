@@ -8,28 +8,6 @@ import org.apache.spark.sql.functions.{avg, max, min, udf}
 object Regressors {
   //Regression
   def predictAverageTotalPaymentsUsingRandomForestRegression(origDf: DataFrame) = {
-
-    // We will use AverageTotalPayments as the label
-
-   /* val df = origDf.withColumn("label", origDf("AverageTotalPayments"))
-      .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
-      .withColumn("MedianHousePrice", toDouble(origDf("2015-12")))
-
-    val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
-      .setOutputCol("feature1")
-    val df_feature1 = feature1Indexer.fit(df).transform(df)
-
-    val assembler = new VectorAssembler().setInputCols(Array("feature1",
-      "ProviderZipCodeDouble", "MedianHousePrice")).setOutputCol("features")
-    val df2 = assembler.transform(df_feature1)*/
-
-//    df2.createOrReplaceTempView("data")
-//    df2.sparkSession.sql("SELECT DRGDefinition, COUNT(*) FROM data GROUP BY DRGDefinition ORDER BY COUNT(*)")
-//      .coalesce(1).write.option("header", "true").csv("sample_file.csv")
-
-
-    // Using count(DISTINCT DRGDefinition) as a feature
-
     val df = addNumberOfDRGsforProviderAsColumn(origDf)
       .withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
@@ -40,8 +18,8 @@ object Regressors {
       .setOutputCol("feature1")
     val df_feature1 = feature1Indexer.fit(df).transform(df)
 
-//    val assembler = new VectorAssembler().setInputCols(Array("feature1",
-//      "ProviderZipCodeDouble", "MedianHousePrice")).setOutputCol("features")
+    //    val assembler = new VectorAssembler().setInputCols(Array(
+    //      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice")).setOutputCol("features")
 
     val assembler = new VectorAssembler().setInputCols(Array("feature1",
       "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
@@ -50,32 +28,39 @@ object Regressors {
     val df2 = assembler.transform(df_feature1)
 
     val splitSeed = 5043
-    val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
+    val Array(trainingDataOrig, testDataOrig) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
 
-    // Random Forest Regresser
+    val trainingData = trainingDataOrig.cache()
+    val testData = testDataOrig.cache()
 
-    val classifier = new RandomForestRegressor()
-      .setImpurity("variance")
-      .setMaxDepth(8)
-      .setNumTrees(20)
-      .setMaxBins(1000)
-      .setFeatureSubsetStrategy("auto")
-      .setSeed(5043)
+    import trainingData.sparkSession.implicits._
+    val distinctDRGDefinitions = trainingData.select($"DRGDefinition").distinct()
+      .rdd.map(row => row.getString(0)).collect()
 
-    val model = classifier.fit(trainingData)
-//    println("Random Forest Regresser model: " + model.toDebugString)
-    println("model.featureImportances: " + model.featureImportances)
+    val predictions = applyRandomForestRegressionCore(trainingData, testData).cache()
 
-    val predictions = model.transform(testData)
-    predictions.select("DRGDefinition", "ProviderZipCode", "MedianHousePrice","count DRGDefinition",
-      "AverageTotalPayments", "label", "prediction").show(50)
+    val overallAggError = computeAggregateError(computeError(predictions))
+    val overallErrors = ("Overall", overallAggError._1, overallAggError._2, overallAggError._3,
+      overallAggError._4, overallAggError._5, overallAggError._6,
+      trainingData.count(), testData.count())
 
-    val evaluator = new RegressionEvaluator()
-      .setLabelCol("label")
-      .setPredictionCol("prediction")
-      .setMetricName("r2")
-    val accuracy = evaluator.evaluate(predictions)
-    println("Random Forest Regresser Accuracy: " + accuracy)
+    // Here we will computer errors for each DRG separately
+    val DRGErrors = distinctDRGDefinitions.sorted.map(DRG => {
+      val subsetTrainingData = trainingData.where($"DRGDefinition".startsWith(DRG))
+      val subsetTestData = testData.where($"DRGDefinition".startsWith(DRG))
+      val subsetPredictions = predictions.where($"DRGDefinition".startsWith(DRG))
+      val aggError =  computeAggregateError(computeError(subsetPredictions))
+      (DRG, aggError._1, aggError._2, aggError._3, aggError._4, aggError._5, aggError._6,
+        subsetTrainingData.count(), subsetTestData.count())
+    }
+    )
+
+    // TODO: the outputFile must be different for each run or the previous output must be deleted.
+    val outputFile = "wholeDRGError_Config1"
+    testData.sparkSession.sparkContext.parallelize(Array(overallErrors) ++ DRGErrors)
+      .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
+        "MaxPercentError", "TrainRows", "TestRows")
+      .coalesce(1).write.option("header", "true").csv(outputFile)
   }
 
 def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
@@ -162,7 +147,7 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     val DRGErrors = distinctDRGDefinitions.sorted.map(DRG => {
       val subsetTrainingData = traingData.where($"DRGDefinition".startsWith(DRG))
       val subsetTestData = testData.where($"DRGDefinition".startsWith(DRG))
-      val aggError = applyRandomForestRegressionCore(subsetTrainingData, subsetTestData)
+      val aggError = applyRandomForestRegressionCoreAndComputeErrors(subsetTrainingData, subsetTestData)
       (DRG, aggError._1, aggError._2, aggError._3, aggError._4, aggError._5, aggError._6,
         subsetTrainingData.count(), subsetTestData.count())
     }
@@ -173,7 +158,7 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     testData.sparkSession.sparkContext.parallelize(DRGErrors)
       .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
         "MaxPercentError", "TrainRows", "TestRows")
-      .coalesce(1).write.csv(outputFile)
+      .coalesce(1).write.option("header", "true").csv(outputFile)
 
   }
 
@@ -195,9 +180,13 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     predictions.select("DRGDefinition", "TotalDischargesDouble", "count(DISTINCT DRGDefinition)","ProviderZipCode",
       "TotalDischarges", "MedianHousePrice", "features",
       "AverageTotalPayments", "label", "prediction").show(5, truncate = false)
+    predictions
+  }
 
+  def applyRandomForestRegressionCoreAndComputeErrors(trainingData: DataFrame, testData: DataFrame) = {
+
+    val predictions = applyRandomForestRegressionCore(trainingData, testData)
     val predictionWithErrors = computeAggregateError(computeError(predictions))
-//    println("predictionWithErrors: " + predictionWithErrors)
     predictionWithErrors
   }
 

@@ -1,6 +1,5 @@
 /* SimpleApp.scala */
 
-import Regressors._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
@@ -92,11 +91,11 @@ object SimpleApp {
   def applyMachineLearningAlgorithms(df: DataFrame): Unit = {
     //    ClusteringAlgorithm.applyKmeans(df)
     //    Classifiers.applyNaiveBayesClassifier(df)
-    //Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
+    Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
 
 //    generateAdHocStats(df)
 //    Regressors.predictAverageTotalPaymentsUsingGBT(df)
-    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
+//    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
     //Regressors.applyLinearRegression(df)
 //    StatisticsComputer.computeStatsOnPaymentData(df)
     //    Regressors.applyGeneralizedLinearRegression(df, "gaussian")
@@ -106,7 +105,6 @@ object SimpleApp {
   }
 
   def generateAdHocStats(df: DataFrame) = {
-    import df.sparkSession.implicits._
     df.createOrReplaceTempView("data")
     df.sparkSession.sql("SELECT DRGDefinition, COUNT(*) COUNT FROM data GROUP BY DRGDefinition ORDER BY COUNT DESC")
       .coalesce(1).write.csv("drg_counts")
