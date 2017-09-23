@@ -9,23 +9,23 @@ object SimpleApp {
   def predictPrices(spark: SparkSession) = {
 
     //Reading Inpatient_prospective_Payment_2015
-    val orig_df = spark.read
+    val df_2015 = spark.read
       .option("header", "true") //reading the headers
       .csv(getClass.getClassLoader.getResource("Inpatient_Prospective_Payment_System__IPPS__Provider_Summary_for_All_Diagnosis-Related_Groups__DRG__-_FY2015.csv").getPath)
 
     val dollarColumns = Array("AverageCoveredCharges", "AverageTotalPayments",
       "AverageMedicarePayments")
-    val paymentDf = removeLeadingDollarSign(normalizeHeaders(orig_df), dollarColumns)
+    val paymentDf = removeLeadingDollarSign(normalizeHeaders(df_2015), dollarColumns)
 
     //Reading medicare_payment_2011.csv
 
-    val orig_df2 = spark.read
+    val df_2011 = spark.read
       .option("header", "true") //reading the headers
       .csv(getClass.getClassLoader.getResource("medicare_payment_2011.csv").getPath)
 
     val dollarColumns2 = Array("AverageCoveredCharges", "AverageTotalPayments",
       "AverageMedicarePayments")
-    val paymentDf2 = removeLeadingDollarSign(normalizeHeaders(orig_df), dollarColumns2)
+    val paymentDf_2011 = removeLeadingDollarSign(normalizeHeaders(df_2011), dollarColumns2)
 
     //Reading Zip_MedianValuePerSqft_AllHomes.csv
     val priceDf = spark.read
@@ -34,17 +34,17 @@ object SimpleApp {
 
     import spark.implicits._
 
-    val joinedDf2=joinOnZipCode(paymentDf2,priceDf.where($"2011-12" isNotNull)).
+    val joinedDf_2011 =joinOnZipCode(paymentDf_2011,priceDf.where($"2011-12" isNotNull)).
       select("DRGDefinition", "ProviderId", "ProviderZipCode", "TotalDischarges", "2011-12", "AverageTotalPayments")
 
-    joinedDf2.show()
+    joinedDf_2011.show()
 
 
     //val joinedDf = joinOnZipCode(paymentDf, priceDf.where($"2015-12" isNotNull))
      // .select("DRGDefinition", "ProviderId", "ProviderZipCode", "TotalDischarges", "2015-12", "AverageTotalPayments")
 
 
-    applyMachineLearningAlgorithms(joinedDf2)
+    applyMachineLearningAlgorithms(joinedDf_2011)
   }
 
 
@@ -94,13 +94,21 @@ object SimpleApp {
     //    Classifiers.applyNaiveBayesClassifier(df)
     //Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
 
-    Regressors.predictAverageTotalPaymentsUsingGBT(df)
-    //Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
+//    generateAdHocStats(df)
+//    Regressors.predictAverageTotalPaymentsUsingGBT(df)
+    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
     //Regressors.applyLinearRegression(df)
 //    StatisticsComputer.computeStatsOnPaymentData(df)
     //    Regressors.applyGeneralizedLinearRegression(df, "gaussian")
     //    Regressors.applyGeneralizedLinearRegression(df, "Gamma")
 
     //Regressors.addNumberOfDRGsforProviderAsColumn(df)
+  }
+
+  def generateAdHocStats(df: DataFrame) = {
+    import df.sparkSession.implicits._
+    df.createOrReplaceTempView("data")
+    df.sparkSession.sql("SELECT DRGDefinition, COUNT(*) COUNT FROM data GROUP BY DRGDefinition ORDER BY COUNT DESC")
+      .coalesce(1).write.csv("drg_counts")
   }
 }

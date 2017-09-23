@@ -1,10 +1,9 @@
 import SimpleApp.toDouble
 import org.apache.spark.ml.evaluation.RegressionEvaluator
 import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
-import org.apache.spark.ml.regression.{GeneralizedLinearRegression, LinearRegression, RandomForestRegressor}
+import org.apache.spark.ml.regression.{GBTRegressor, GeneralizedLinearRegression, LinearRegression, RandomForestRegressor}
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions.{avg, max, min, udf}
-import org.apache.spark.ml.regression.{GBTRegressionModel, GBTRegressor}
 
 object Regressors {
   //Regression
@@ -102,12 +101,12 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     .setFeaturesCol("features")
     .setMaxIter(10)
     .setImpurity("variance")
-    .setMaxDepth(8)
+    .setMaxDepth(3)
     .setMaxBins(1000)
     .setSeed(5043)
 
   val model = gbt.fit(trainingData)
-  val predictions = model.transform(testData)
+  val predictions = model.transform(testData).cache()
   predictions.select("prediction", "label", "features").show(5)
 
   val evaluator = new RegressionEvaluator()
@@ -116,8 +115,7 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     .setMetricName("rmse")
   val rmse = evaluator.evaluate(predictions)
   println("Root Mean Squared Error (RMSE) on test data = " + rmse)
-
-
+  displayError(computeError(predictions))
 
 }
 
@@ -126,23 +124,17 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     // We will use AverageTotalPayments as the label
 
     val df = addNumberOfDRGsforProviderAsColumn(origDf)
-      .where(origDf("DRGDefinition").startsWith("871"))
       .withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
       .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")) )
       .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
 
-    println("df.count(): " + df.count())
-    df.printSchema()
-
-    df.createOrReplaceTempView("data")
-    df.sparkSession.sql("SELECT MIN(AverageTotalPayments), AVG(AverageTotalPayments), MAX(AverageTotalPayments) FROM data").show(false)
-
 //    val assembler = new VectorAssembler().setInputCols(Array(
 //      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice")).setOutputCol("features")
 
     val assembler = new VectorAssembler().setInputCols(Array(
-      "ProviderZipCodeDouble", "MedianHousePrice","count(DISTINCT DRGDefinition)")).setOutputCol("features")
+      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      "count(DISTINCT DRGDefinition)")).setOutputCol("features")
 
     val df2 = assembler.transform(df)
 
@@ -154,7 +146,7 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
       .setImpurity("variance")
       .setMaxDepth(8)
       .setNumTrees(20)
-      .setMaxBins(100)
+      .setMaxBins(1000)
       .setFeatureSubsetStrategy("auto")
       .setSeed(5043)
 
@@ -163,18 +155,18 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     println("model.featureImportances: " + model.featureImportances)
 
     val predictions = model.transform(testData)
-    predictions.select("DRGDefinition", "count(DISTINCT DRGDefinition)","ProviderZipCode", "TotalDischarges", "MedianHousePrice",
-      "AverageTotalPayments", "label", "prediction").show(5, false)
+    predictions.select("DRGDefinition", "TotalDischargesDouble", "count(DISTINCT DRGDefinition)","ProviderZipCode", "TotalDischarges", "MedianHousePrice",
+      "AverageTotalPayments", "label", "prediction").show(5, truncate = false)
 
-    val evaluator = new RegressionEvaluator()
-      .setLabelCol("label")
-      .setPredictionCol("prediction")
-      .setMetricName("r2")
-    val accuracy = evaluator.evaluate(predictions)
-    println("Random Forest Regresser Accuracy on each drug seperately: " + accuracy)
+//    val evaluator = new RegressionEvaluator()
+//      .setLabelCol("label")
+//      .setPredictionCol("prediction")
+//      .setMetricName("r2")
+//    val accuracy = evaluator.evaluate(predictions)
+//    println("Random Forest Regresser Accuracy on each drug seperately: " + accuracy)
 
-    val predictionWithErrors = computeError(predictions)
-    displayError(predictionWithErrors)
+    val predictionWithErrors = computeAggregateError(computeError(predictions))
+    println("predictionWithErrors: " + predictionWithErrors)
   }
 
 
@@ -199,6 +191,13 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     df.select(min($"PercentDifference"), avg($"PercentDifference"), max($"PercentDifference")).show(false)
   }
 
+  def computeAggregateError(df: DataFrame) = {
+    import df.sparkSession.implicits._
+    val row1 = df.select(min($"Difference"), avg($"Difference"), max($"Difference")).first()
+    val row2 = df.select(min($"PercentDifference"), avg($"PercentDifference"), max($"PercentDifference")).first()
+    (row1.getDouble(0), row1.getDouble(1), row1.getDouble(2), row2.getDouble(0), row2.getDouble(1), row2.getDouble(2))
+  }
+
   def addNumberOfDRGsforProviderAsColumn(df: DataFrame) = {
     // TODO: Add the number of types of DRGDefinition associated with the ProviderId as a column
 
@@ -207,7 +206,7 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
       "FROM JoinedView GROUP BY ProviderId ")
 
     val finalDF = df.join(
-      groupedDf, df("ProviderId") === groupedDf("ProviderId"), "inner")
+      groupedDf, df("ProviderId") === groupedDf("ProviderId"), "inner").cache()
 
     finalDF.show()
     finalDF.printSchema()
