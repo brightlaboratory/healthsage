@@ -91,9 +91,9 @@ object SimpleApp {
   def applyMachineLearningAlgorithms(df: DataFrame): Unit = {
     //    ClusteringAlgorithm.applyKmeans(df)
     //    Classifiers.applyNaiveBayesClassifier(df)
-    Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
+//    Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
 
-//    generateAdHocStats(df)
+    generateAdHocStats(df)
 //    Regressors.predictAverageTotalPaymentsUsingGBT(df)
 //    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
     //Regressors.applyLinearRegression(df)
@@ -105,8 +105,10 @@ object SimpleApp {
   }
 
   def generateAdHocStats(df: DataFrame) = {
-    df.createOrReplaceTempView("data")
-    df.sparkSession.sql("SELECT DRGDefinition, COUNT(*) COUNT FROM data GROUP BY DRGDefinition ORDER BY COUNT DESC")
-      .coalesce(1).write.csv("drg_counts")
+//    df.withColumn("TotalDischargesDouble", toDouble(df("TotalDischarges")) )
+//      .createOrReplaceTempView("data")
+//    df.sparkSession.sql("SELECT SUM(TotalDischargesDouble * AverageTotalPayments) FROM data").show(false)
+
+    df.sample(withReplacement = false, 5.toDouble / df.count().toDouble).show(truncate = false)
   }
 }
