@@ -146,7 +146,7 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     // Here we will build a model for each DRG separately
     val DRGErrors = distinctDRGDefinitions.sorted.zipWithIndex
       .filter(str_with_index => {
-        if (str_with_index._2 >= 0 && str_with_index._2 <= 20) {
+        if (str_with_index._2 >= 81 && str_with_index._2 <= 110) {
           true
         } else {
           false
@@ -163,7 +163,7 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
       )
 
     // TODO: the outputFile must be different for each run or the previous output must be deleted.
-    val outputFile = "PerDRGError_Config1_0_20"
+    val outputFile = "PerDRGError_Config1_81_110"
     testData.sparkSession.sparkContext.parallelize(DRGErrors)
       .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
         "MaxPercentError", "TrainRows", "TestRows")

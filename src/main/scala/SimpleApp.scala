@@ -109,6 +109,9 @@ object SimpleApp {
 //      .createOrReplaceTempView("data")
 //    df.sparkSession.sql("SELECT SUM(TotalDischargesDouble * AverageTotalPayments) FROM data").show(false)
 
-    df.sample(withReplacement = false, 5.toDouble / df.count().toDouble).show(truncate = false)
+//    df.sample(withReplacement = false, 5.toDouble / df.count().toDouble).show(truncate = false)
+      df.createOrReplaceTempView("data")
+    df.sparkSession.sql("SELECT COUNT(*), MIN(AverageTotalPayments), AVG(AverageTotalPayments), MAX(AverageTotalPayments), stddev_pop(AverageTotalPayments), stddev_pop(AverageTotalPayments)* 100 /AVG(AverageTotalPayments) FROM data GROUP BY DRGDefinition ORDER BY COUNT(*)")
+      .coalesce(1).write.option("header", "true").csv("standard_deviation")
   }
 }
