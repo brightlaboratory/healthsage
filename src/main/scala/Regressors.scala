@@ -144,17 +144,26 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
       .rdd.map(row => row.getString(0)).collect()
 
     // Here we will build a model for each DRG separately
-    val DRGErrors = distinctDRGDefinitions.sorted.map(DRG => {
-      val subsetTrainingData = traingData.where($"DRGDefinition".startsWith(DRG))
-      val subsetTestData = testData.where($"DRGDefinition".startsWith(DRG))
-      val aggError = applyRandomForestRegressionCoreAndComputeErrors(subsetTrainingData, subsetTestData)
-      (DRG, aggError._1, aggError._2, aggError._3, aggError._4, aggError._5, aggError._6,
-        subsetTrainingData.count(), subsetTestData.count())
-    }
-    )
+    val DRGErrors = distinctDRGDefinitions.sorted.zipWithIndex
+      .filter(str_with_index => {
+        if (str_with_index._2 >= 0 && str_with_index._2 <= 20) {
+          true
+        } else {
+          false
+        }
+      })
+      .map(DRG => {
+        println("DRG: " + DRG)
+        val subsetTrainingData = traingData.where($"DRGDefinition".startsWith(DRG._1))
+        val subsetTestData = testData.where($"DRGDefinition".startsWith(DRG._1))
+        val aggError = applyRandomForestRegressionCoreAndComputeErrors(subsetTrainingData, subsetTestData)
+        (DRG._1, aggError._1, aggError._2, aggError._3, aggError._4, aggError._5, aggError._6,
+          subsetTrainingData.count(), subsetTestData.count())
+      }
+      )
 
     // TODO: the outputFile must be different for each run or the previous output must be deleted.
-    val outputFile = "PerDRGError_Config1"
+    val outputFile = "PerDRGError_Config1_0_20"
     testData.sparkSession.sparkContext.parallelize(DRGErrors)
       .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
         "MaxPercentError", "TrainRows", "TestRows")

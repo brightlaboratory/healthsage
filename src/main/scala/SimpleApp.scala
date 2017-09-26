@@ -93,9 +93,9 @@ object SimpleApp {
     //    Classifiers.applyNaiveBayesClassifier(df)
 //    Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
 
-    generateAdHocStats(df)
+//    generateAdHocStats(df)
 //    Regressors.predictAverageTotalPaymentsUsingGBT(df)
-//    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
+    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
     //Regressors.applyLinearRegression(df)
 //    StatisticsComputer.computeStatsOnPaymentData(df)
     //    Regressors.applyGeneralizedLinearRegression(df, "gaussian")
