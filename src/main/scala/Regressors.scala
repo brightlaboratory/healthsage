@@ -56,7 +56,7 @@ object Regressors {
     )
 
     // TODO: the outputFile must be different for each run or the previous output must be deleted.
-    val outputFile = "wholeDRGError_Config1"
+    val outputFile = "wholeDRGError_depth_4_trees_20"
     testData.sparkSession.sparkContext.parallelize(Array(overallErrors) ++ DRGErrors)
       .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
         "MaxPercentError", "TrainRows", "TestRows")
@@ -175,7 +175,7 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     // Random Forest Regresser
     val classifier = new RandomForestRegressor()
       .setImpurity("variance")
-      .setMaxDepth(8)
+      .setMaxDepth(4)
       .setNumTrees(20)
       .setMaxBins(1000)
       .setFeatureSubsetStrategy("auto")
