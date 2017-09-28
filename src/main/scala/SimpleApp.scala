@@ -125,17 +125,21 @@ object SimpleApp {
 //      .orderBy($"MedianHousePrice")
 //      .coalesce(1).write.option("header", "true").csv("194_house_to_payment")
 
-    addNumberOfDRGsforProviderAsColumn(df)
-      .where($"DRGDefinition".startsWith("194"))
-      .orderBy($"count(DISTINCT DRGDefinition)")
-      .select($"DRGDefinition", $"count(DISTINCT DRGDefinition)", $"AverageTotalPayments")
-      .coalesce(1).write.option("header", "true").csv("194_DRGCount_Payment")
+//    addNumberOfDRGsforProviderAsColumn(df)
+//      .where($"DRGDefinition".startsWith("194"))
+//      .orderBy($"count(DISTINCT DRGDefinition)")
+//      .select($"DRGDefinition", $"count(DISTINCT DRGDefinition)", $"AverageTotalPayments")
+//      .coalesce(1).write.option("header", "true").csv("194_DRGCount_Payment")
 
 //    StatisticsComputer.computeCorrelations(addNumberOfDRGsforProviderAsColumn(df)
 //      .withColumn("MedianHousePrice", toDouble($"2011-12"))
 //      .withColumn("DistinctDRGCount", LongtoDouble($"count(DISTINCT DRGDefinition)"))
 //      .where($"DRGDefinition".startsWith("194")),
 //      "DistinctDRGCount", "AverageTotalPayments", "pearson")
+
+    df.createOrReplaceTempView("data")
+//    df.sparkSession.sql("SELECT COUNT(*) FROM data").show()
+    df.sparkSession.sql("SELECT * FROM data WHERE ProviderZipCode IN (SELECT ProviderZipCode FROM data GROUP BY ProviderZipCode HAVING COUNT(DISTINCT ProviderId) > 1) ORDER BY ProviderZipCode").show(1000, truncate = false)
 
   }
 }
