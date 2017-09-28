@@ -91,9 +91,9 @@ object SimpleApp {
   def applyMachineLearningAlgorithms(df: DataFrame): Unit = {
     //    ClusteringAlgorithm.applyKmeans(df)
     //    Classifiers.applyNaiveBayesClassifier(df)
-    Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
+//    Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
 
-//    generateAdHocStats(df)
+    generateAdHocStats(df)
 //    Regressors.predictAverageTotalPaymentsUsingGBT(df)
 //    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
     //Regressors.applyLinearRegression(df)
@@ -110,8 +110,20 @@ object SimpleApp {
 //    df.sparkSession.sql("SELECT SUM(TotalDischargesDouble * AverageTotalPayments) FROM data").show(false)
 
 //    df.sample(withReplacement = false, 5.toDouble / df.count().toDouble).show(truncate = false)
-      df.createOrReplaceTempView("data")
-    df.sparkSession.sql("SELECT COUNT(*), MIN(AverageTotalPayments), AVG(AverageTotalPayments), MAX(AverageTotalPayments), stddev_pop(AverageTotalPayments), stddev_pop(AverageTotalPayments)* 100 /AVG(AverageTotalPayments) FROM data GROUP BY DRGDefinition ORDER BY COUNT(*)")
-      .coalesce(1).write.option("header", "true").csv("standard_deviation")
+//      df.createOrReplaceTempView("data")
+//    df.sparkSession.sql("SELECT COUNT(*), MIN(AverageTotalPayments), AVG(AverageTotalPayments), MAX(AverageTotalPayments), stddev_pop(AverageTotalPayments), stddev_pop(AverageTotalPayments)* 100 /AVG(AverageTotalPayments) FROM data GROUP BY DRGDefinition ORDER BY COUNT(*)")
+//      .coalesce(1).write.option("header", "true").csv("standard_deviation")
+    import df.sparkSession.implicits._
+//    df.withColumn("MedianHousePrice", toDouble($"2011-12"))
+//      .select($"DRGDefinition", $"MedianHousePrice", $"AverageTotalPayments")
+//      .where($"DRGDefinition".startsWith("194"))
+//      .orderBy($"MedianHousePrice")
+//      .coalesce(1).write.option("header", "true").csv("194_house_to_payment")
+
+    StatisticsComputer.computeCorrelations(
+      df.withColumn("MedianHousePrice", toDouble($"2011-12"))
+        .where($"DRGDefinition".startsWith("194")),
+      "MedianHousePrice", "AverageTotalPayments", "pearson")
+
   }
 }

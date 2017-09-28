@@ -4,13 +4,13 @@ import org.apache.spark.mllib.stat.Statistics
 
 object StatisticsComputer {
 
-  def computeCorrelations(df: DataFrame, column1: String, column2: String) = {
+  def computeCorrelations(df: DataFrame, column1: String, column2: String, method: String = "") = {
     val seriesX = toDoubleRDD(df.select(column1))
     val seriesY = toDoubleRDD(df.select(column2))
 
     // compute the correlation using Pearson's method. Enter "spearman" for Spearman's method. If a
     // method is not specified, Pearson's method will be used by default.
-    val correlation: Double = Statistics.corr(seriesX, seriesY, "spearman")
+    val correlation: Double = Statistics.corr(seriesX, seriesY, method)
     println(s"Correlation is: $correlation")
   }
 
