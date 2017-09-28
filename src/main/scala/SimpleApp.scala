@@ -1,5 +1,6 @@
 /* SimpleApp.scala */
 
+import Regressors.addNumberOfDRGsforProviderAsColumn
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
@@ -87,6 +88,10 @@ object SimpleApp {
     str.toDouble
   })
 
+  val LongtoDouble = udf((num: Long) => {
+    num.toDouble
+  })
+
 
   def applyMachineLearningAlgorithms(df: DataFrame): Unit = {
     //    ClusteringAlgorithm.applyKmeans(df)
@@ -120,10 +125,17 @@ object SimpleApp {
 //      .orderBy($"MedianHousePrice")
 //      .coalesce(1).write.option("header", "true").csv("194_house_to_payment")
 
-    StatisticsComputer.computeCorrelations(
-      df.withColumn("MedianHousePrice", toDouble($"2011-12"))
-        .where($"DRGDefinition".startsWith("194")),
-      "MedianHousePrice", "AverageTotalPayments", "pearson")
+    addNumberOfDRGsforProviderAsColumn(df)
+      .where($"DRGDefinition".startsWith("194"))
+      .orderBy($"count(DISTINCT DRGDefinition)")
+      .select($"DRGDefinition", $"count(DISTINCT DRGDefinition)", $"AverageTotalPayments")
+      .coalesce(1).write.option("header", "true").csv("194_DRGCount_Payment")
+
+//    StatisticsComputer.computeCorrelations(addNumberOfDRGsforProviderAsColumn(df)
+//      .withColumn("MedianHousePrice", toDouble($"2011-12"))
+//      .withColumn("DistinctDRGCount", LongtoDouble($"count(DISTINCT DRGDefinition)"))
+//      .where($"DRGDefinition".startsWith("194")),
+//      "DistinctDRGCount", "AverageTotalPayments", "pearson")
 
   }
 }
