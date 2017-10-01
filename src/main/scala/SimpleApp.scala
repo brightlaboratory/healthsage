@@ -98,10 +98,10 @@ object SimpleApp {
     //    Classifiers.applyNaiveBayesClassifier(df)
 //    Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
 
-    generateAdHocStats(df)
+    //generateAdHocStats(df)
 //    Regressors.predictAverageTotalPaymentsUsingGBT(df)
 //    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
-    //Regressors.applyLinearRegression(df)
+    Regressors.applyLinearRegression(df)
 //    StatisticsComputer.computeStatsOnPaymentData(df)
     //    Regressors.applyGeneralizedLinearRegression(df, "gaussian")
     //    Regressors.applyGeneralizedLinearRegression(df, "Gamma")
@@ -137,9 +137,9 @@ object SimpleApp {
 //      .where($"DRGDefinition".startsWith("194")),
 //      "DistinctDRGCount", "AverageTotalPayments", "pearson")
 
-    df.createOrReplaceTempView("data")
+    //df.createOrReplaceTempView("data")
 //    df.sparkSession.sql("SELECT COUNT(*) FROM data").show()
-    df.sparkSession.sql("SELECT * FROM data WHERE ProviderZipCode IN (SELECT ProviderZipCode FROM data GROUP BY ProviderZipCode HAVING COUNT(DISTINCT ProviderId) > 1) ORDER BY ProviderZipCode").show(1000, truncate = false)
+    //df.sparkSession.sql("SELECT * FROM data WHERE ProviderZipCode IN (SELECT ProviderZipCode FROM data GROUP BY ProviderZipCode HAVING COUNT(DISTINCT ProviderId) > 1) ORDER BY ProviderZipCode").show(1000, truncate = false)
 
   }
 }

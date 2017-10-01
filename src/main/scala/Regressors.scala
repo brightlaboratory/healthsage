@@ -11,7 +11,7 @@ object Regressors {
     val df = addNumberOfDRGsforProviderAsColumn(origDf)
       .withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
-      .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")) )
+      .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")))
       .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
 
     val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
@@ -49,7 +49,7 @@ object Regressors {
       val subsetTrainingData = trainingData.where($"DRGDefinition".startsWith(DRG))
       val subsetTestData = testData.where($"DRGDefinition".startsWith(DRG))
       val subsetPredictions = predictions.where($"DRGDefinition".startsWith(DRG))
-      val aggError =  computeAggregateError(computeError(subsetPredictions))
+      val aggError = computeAggregateError(computeError(subsetPredictions))
       (DRG, aggError._1, aggError._2, aggError._3, aggError._4, aggError._5, aggError._6,
         subsetTrainingData.count(), subsetTestData.count())
     }
@@ -63,56 +63,56 @@ object Regressors {
       .coalesce(1).write.option("header", "true").csv(outputFile)
   }
 
-def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
+  def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
 
-  // Using count(DISTINCT DRGDefinition) as a feature
+    // Using count(DISTINCT DRGDefinition) as a feature
 
-  val df = addNumberOfDRGsforProviderAsColumn(origDf)
-    .withColumn("label", origDf("AverageTotalPayments"))
-    .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
-    .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")) )
-    .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+    val df = addNumberOfDRGsforProviderAsColumn(origDf)
+      .withColumn("label", origDf("AverageTotalPayments"))
+      .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+      .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")))
+      .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
 
-  df.show()
+    df.show()
 
-  val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
-    .setOutputCol("feature1")
-  val df_feature1 = feature1Indexer.fit(df).transform(df)
+    val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
+      .setOutputCol("feature1")
+    val df_feature1 = feature1Indexer.fit(df).transform(df)
 
-//  val assembler = new VectorAssembler().setInputCols(Array("feature1",
-//    "ProviderZipCodeDouble", "MedianHousePrice","count(DISTINCT DRGDefinition)")).setOutputCol("features")
+    //  val assembler = new VectorAssembler().setInputCols(Array("feature1",
+    //    "ProviderZipCodeDouble", "MedianHousePrice","count(DISTINCT DRGDefinition)")).setOutputCol("features")
 
-  val assembler = new VectorAssembler().setInputCols(Array("feature1",
-    "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
-    "count(DISTINCT DRGDefinition)")).setOutputCol("features")
+    val assembler = new VectorAssembler().setInputCols(Array("feature1",
+      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      "count(DISTINCT DRGDefinition)")).setOutputCol("features")
 
-  val df2 = assembler.transform(df_feature1)
+    val df2 = assembler.transform(df_feature1)
 
-  val splitSeed = 5043
-  val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
+    val splitSeed = 5043
+    val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
 
-  val gbt = new GBTRegressor()
-    .setLabelCol("label")
-    .setFeaturesCol("features")
-    .setMaxIter(10)
-    .setImpurity("variance")
-    .setMaxDepth(3)
-    .setMaxBins(1000)
-    .setSeed(5043)
+    val gbt = new GBTRegressor()
+      .setLabelCol("label")
+      .setFeaturesCol("features")
+      .setMaxIter(10)
+      .setImpurity("variance")
+      .setMaxDepth(3)
+      .setMaxBins(1000)
+      .setSeed(5043)
 
-  val model = gbt.fit(trainingData)
-  val predictions = model.transform(testData).cache()
-  predictions.select("prediction", "label", "features").show(5)
+    val model = gbt.fit(trainingData)
+    val predictions = model.transform(testData).cache()
+    predictions.select("prediction", "label", "features").show(5)
 
-  val evaluator = new RegressionEvaluator()
-    .setLabelCol("label")
-    .setPredictionCol("prediction")
-    .setMetricName("rmse")
-  val rmse = evaluator.evaluate(predictions)
-  println("Root Mean Squared Error (RMSE) on test data = " + rmse)
-  displayError(computeError(predictions))
+    val evaluator = new RegressionEvaluator()
+      .setLabelCol("label")
+      .setPredictionCol("prediction")
+      .setMetricName("rmse")
+    val rmse = evaluator.evaluate(predictions)
+    println("Root Mean Squared Error (RMSE) on test data = " + rmse)
+    displayError(computeError(predictions))
 
-}
+  }
 
   def applyRandomForestRegressionOnEachDRGSeparately(origDf: DataFrame) = {
 
@@ -121,11 +121,11 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     val df = addNumberOfDRGsforProviderAsColumn(origDf)
       .withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
-      .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")) )
+      .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")))
       .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
 
-//    val assembler = new VectorAssembler().setInputCols(Array(
-//      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice")).setOutputCol("features")
+    //    val assembler = new VectorAssembler().setInputCols(Array(
+    //      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice")).setOutputCol("features")
 
     val assembler = new VectorAssembler().setInputCols(Array(
       "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
@@ -186,7 +186,7 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     println("model.featureImportances: " + model.featureImportances)
 
     val predictions = model.transform(testData).cache()
-    predictions.select("DRGDefinition", "TotalDischargesDouble", "count(DISTINCT DRGDefinition)","ProviderZipCode",
+    predictions.select("DRGDefinition", "TotalDischargesDouble", "count(DISTINCT DRGDefinition)", "ProviderZipCode",
       "TotalDischarges", "MedianHousePrice", "features",
       "AverageTotalPayments", "label", "prediction").show(5, truncate = false)
     predictions
@@ -231,7 +231,7 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
   def addNumberOfDRGsforProviderAsColumn(df: DataFrame) = {
 
     df.createOrReplaceTempView("JoinedView")
-    val groupedDf=df.sparkSession.sql("SELECT ProviderId,"+ "COUNT(DISTINCT DRGDefinition)" +
+    val groupedDf = df.sparkSession.sql("SELECT ProviderId," + "COUNT(DISTINCT DRGDefinition)" +
       "FROM JoinedView GROUP BY ProviderId ")
 
     val finalDF = df.join(
@@ -296,18 +296,19 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
 
     // Using count(DISTINCT DRGDefinition) as a feature
 
+
     val df = addNumberOfDRGsforProviderAsColumn(origDf)
       .withColumn("label", origDf("AverageTotalPayments"))
-      .withColumn("count DRGDefinition", origDf("count(DISTINCT DRGDefinition)"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+      .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")))
       .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
 
     val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
       .setOutputCol("feature1")
     val df_feature1 = feature1Indexer.fit(df).transform(df)
 
-//    val assembler = new VectorAssembler().setInputCols(Array("feature1",
-//      "ProviderZipCodeDouble", "MedianHousePrice","count(DISTINCT DRGDefinition)")).setOutputCol("features")
+    //    val assembler = new VectorAssembler().setInputCols(Array("feature1",
+    //      "ProviderZipCodeDouble", "MedianHousePrice","count(DISTINCT DRGDefinition)")).setOutputCol("features")
 
     val assembler = new VectorAssembler().setInputCols(Array("feature1",
       "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
@@ -315,12 +316,47 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
 
     val df2 = assembler.transform(df_feature1)
 
-
     val splitSeed = 5043
-    val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
+    val Array(trainingDataOrig, testDataOrig) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
+
+    val trainingData = trainingDataOrig.cache()
+    val testData = testDataOrig.cache()
+    import trainingData.sparkSession.implicits._
+    val distinctDRGDefinitions = trainingData.select($"DRGDefinition").distinct()
+      .rdd.map(row => row.getString(0)).collect()
+
+    val predictions = applyLinearRegressionCore(trainingData, testData).cache()
+
+    val overallAggError = computeAggregateError(computeError(predictions))
+    val overallErrors = ("Overall", overallAggError._1, overallAggError._2, overallAggError._3,
+      overallAggError._4, overallAggError._5, overallAggError._6,
+      trainingData.count(), testData.count())
+
+    // Here we will computer errors for each DRG separately
+    val DRGErrors = distinctDRGDefinitions.sorted.map(DRG => {
+      val subsetTrainingData = trainingData.where($"DRGDefinition".startsWith(DRG))
+      val subsetTestData = testData.where($"DRGDefinition".startsWith(DRG))
+      val subsetPredictions = predictions.where($"DRGDefinition".startsWith(DRG))
+      val aggError = computeAggregateError(computeError(subsetPredictions))
+      (DRG, aggError._1, aggError._2, aggError._3, aggError._4, aggError._5, aggError._6,
+        subsetTrainingData.count(), subsetTestData.count())
+    }
+    )
+
+    // TODO: the outputFile must be different for each run or the previous output must be deleted.
+    val outputFile = "maxIterations_3"
+    testData.sparkSession.sparkContext.parallelize(Array(overallErrors) ++ DRGErrors)
+      .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
+        "MaxPercentError", "TrainRows", "TestRows")
+      .coalesce(1).write.option("header", "true").csv(outputFile)
+  }
+
+
+  def applyLinearRegressionCore(trainingData: DataFrame, testData: DataFrame) = {
+
 
     val lr = new LinearRegression()
-      .setMaxIter(10)
+      .setMaxIter(3)
       .setRegParam(0.3)
       .setElasticNetParam(0.8)
 
@@ -328,17 +364,13 @@ def predictAverageTotalPaymentsUsingGBT(origDf: DataFrame) = {
     val lrModel = lr.fit(trainingData)
 
     // Apply the model on testData
-    val predictions_glr = lrModel.transform(testData)
-    predictions_glr.select("DRGDefinition", "count DRGDefinition","ProviderZipCode", "MedianHousePrice",
-      "AverageTotalPayments", "label", "prediction").show(5)
+    val predictions_glr = lrModel.transform(testData).cache()
+    predictions_glr.select("DRGDefinition", "TotalDischargesDouble", "count(DISTINCT DRGDefinition)", "ProviderZipCode",
+      "TotalDischarges", "MedianHousePrice", "features",
+      "AverageTotalPayments", "label", "prediction").show(5, truncate = false)
 
-    val evaluator_glr = new RegressionEvaluator()
-      .setLabelCol("label")
-      .setPredictionCol("prediction")
-      .setMetricName("r2")
-
-    val accuracy_lr = evaluator_glr.evaluate(predictions_glr)
-    println("Accuracy Linear Regression: " + accuracy_lr)
+    predictions_glr
 
   }
+
 }
