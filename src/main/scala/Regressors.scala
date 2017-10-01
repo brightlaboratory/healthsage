@@ -356,9 +356,6 @@ object Regressors {
 
 
     val lr = new LinearRegression()
-      .setMaxIter(3)
-      .setRegParam(0.3)
-      .setElasticNetParam(0.8)
 
     // Fit the model
     val lrModel = lr.fit(trainingData)
@@ -372,5 +369,63 @@ object Regressors {
     predictions_glr
 
   }
+
+  def applyLinearRegressionOnEachDRGSeparately(origDf: DataFrame) = {
+
+    // We will use AverageTotalPayments as the label
+
+    val df = addNumberOfDRGsforProviderAsColumn(origDf)
+      .withColumn("label", origDf("AverageTotalPayments"))
+      .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+      .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")))
+      .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+
+    //    val assembler = new VectorAssembler().setInputCols(Array(
+    //      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice")).setOutputCol("features")
+
+    val assembler = new VectorAssembler().setInputCols(Array(
+      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      "count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
+    val df2 = assembler.transform(df)
+
+    val splitSeed = 5043
+    val Array(trainingDataOrig, testDataOrig) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
+
+    val traingData = trainingDataOrig.cache()
+    val testData = testDataOrig.cache()
+
+    import traingData.sparkSession.implicits._
+    val distinctDRGDefinitions = traingData.select($"DRGDefinition").distinct()
+      .rdd.map(row => row.getString(0)).collect()
+
+    // Here we will build a model for each DRG separately
+    val DRGErrors = distinctDRGDefinitions.sorted.map(DRG => {
+      val subsetTrainingData = traingData.where($"DRGDefinition".startsWith(DRG))
+      val subsetTestData = testData.where($"DRGDefinition".startsWith(DRG))
+      val aggError = applyRandomForestRegressionCoreAndComputeErrors(subsetTrainingData, subsetTestData)
+      (DRG, aggError._1, aggError._2, aggError._3, aggError._4, aggError._5, aggError._6,
+        subsetTrainingData.count(), subsetTestData.count())
+    }
+    )
+
+
+    // TODO: the outputFile must be different for each run or the previous output must be deleted.
+    val outputFile = "PerDRG_LinearRegression_default"
+    testData.sparkSession.sparkContext.parallelize(DRGErrors)
+      .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
+        "MaxPercentError", "TrainRows", "TestRows")
+      .coalesce(1).write.option("header", "true").csv(outputFile)
+
+  }
+
+  def applyLinearRegressionCoreAndComputeErrors(trainingData: DataFrame, testData: DataFrame) = {
+
+    val predictions = applyLinearRegressionCore(trainingData, testData)
+    val predictionWithErrors = computeAggregateError(computeError(predictions))
+    predictionWithErrors
+  }
+
+
 
 }
