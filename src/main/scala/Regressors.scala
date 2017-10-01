@@ -344,7 +344,7 @@ object Regressors {
     )
 
     // TODO: the outputFile must be different for each run or the previous output must be deleted.
-    val outputFile = "maxIterations_3"
+    val outputFile = "maxIterations_100"
     testData.sparkSession.sparkContext.parallelize(Array(overallErrors) ++ DRGErrors)
       .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
         "MaxPercentError", "TrainRows", "TestRows")
@@ -356,9 +356,9 @@ object Regressors {
 
 
     val lr = new LinearRegression()
-      .setMaxIter(3)
-      .setRegParam(0.3)
-      .setElasticNetParam(0.8)
+//      .setMaxIter(3)
+//      .setRegParam(0.3)
+//      .setElasticNetParam(0.8)
 
     // Fit the model
     val lrModel = lr.fit(trainingData)
