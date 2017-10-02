@@ -403,7 +403,7 @@ object Regressors {
     val DRGErrors = distinctDRGDefinitions.sorted.map(DRG => {
       val subsetTrainingData = traingData.where($"DRGDefinition".startsWith(DRG))
       val subsetTestData = testData.where($"DRGDefinition".startsWith(DRG))
-      val aggError = applyRandomForestRegressionCoreAndComputeErrors(subsetTrainingData, subsetTestData)
+      val aggError = applyLinearRegressionCoreAndComputeErrors(subsetTrainingData, subsetTestData)
       (DRG, aggError._1, aggError._2, aggError._3, aggError._4, aggError._5, aggError._6,
         subsetTrainingData.count(), subsetTestData.count())
     }
