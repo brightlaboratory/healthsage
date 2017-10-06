@@ -95,17 +95,18 @@ object SimpleApp {
 
   def applyMachineLearningAlgorithms(df: DataFrame): Unit = {
 
-    Regressors.predictAverageTotalPaymentsUsingGBT(df)
-    Regressors.applyGBTRegressionOnEachDRGSeparately(df)
+    //Regressors.predictAverageTotalPaymentsUsingGBT(df)
+    //Regressors.applyGBTRegressionOnEachDRGSeparately(df)
     //    ClusteringAlgorithm.applyKmeans(df)
     //    Classifiers.applyNaiveBayesClassifier(df)
 //    Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
 
     //generateAdHocStats(df)
 //    Regressors.predictAverageTotalPaymentsUsingGBT(df)
-//    Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
-    //Regressors.applyLinearRegression(df)
-    //Regressors.applyLinearRegressionOnEachDRGSeparately(df)
+      Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
+      Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
+      //Regressors.applyLinearRegression(df)
+      //Regressors.applyLinearRegressionOnEachDRGSeparately(df)
 //    StatisticsComputer.computeStatsOnPaymentData(df)
     //    Regressors.applyGeneralizedLinearRegression(df, "gaussian")
     //    Regressors.applyGeneralizedLinearRegression(df, "Gamma")

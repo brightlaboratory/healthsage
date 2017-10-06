@@ -12,7 +12,7 @@ object Regressors {
       .withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
       .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")))
-      .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+      //.withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
 
     val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
       .setOutputCol("feature1")
@@ -21,8 +21,13 @@ object Regressors {
     //    val assembler = new VectorAssembler().setInputCols(Array(
     //      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice")).setOutputCol("features")
 
+    //val assembler = new VectorAssembler().setInputCols(Array("feature1",
+      //"ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      //"count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
+    //Without MedianHousePrice as a feature
     val assembler = new VectorAssembler().setInputCols(Array("feature1",
-      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      "ProviderZipCodeDouble", "TotalDischargesDouble",
       "count(DISTINCT DRGDefinition)")).setOutputCol("features")
 
     val df2 = assembler.transform(df_feature1)
@@ -56,7 +61,7 @@ object Regressors {
     )
 
     // TODO: the outputFile must be different for each run or the previous output must be deleted.
-    val outputFile = "wholeDRGError_depth_4_trees_20"
+    val outputFile = "wholeDRGError_depth_8_trees_20"
     testData.sparkSession.sparkContext.parallelize(Array(overallErrors) ++ DRGErrors)
       .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
         "MaxPercentError", "TrainRows", "TestRows")
@@ -71,14 +76,20 @@ object Regressors {
       .withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
       .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")))
-      .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+     // .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
 
     //    val assembler = new VectorAssembler().setInputCols(Array(
     //      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice")).setOutputCol("features")
 
+    //val assembler = new VectorAssembler().setInputCols(Array(
+      //"ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      //"count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
+    //Without MedianHousePrice as a feature
     val assembler = new VectorAssembler().setInputCols(Array(
-      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      "ProviderZipCodeDouble", "TotalDischargesDouble",
       "count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
 
     val df2 = assembler.transform(df)
 
@@ -93,26 +104,17 @@ object Regressors {
       .rdd.map(row => row.getString(0)).collect()
 
     // Here we will build a model for each DRG separately
-    val DRGErrors = distinctDRGDefinitions.sorted.zipWithIndex
-      .filter(str_with_index => {
-        if (str_with_index._2 >= 81 && str_with_index._2 <= 110) {
-          true
-        } else {
-          false
-        }
-      })
-      .map(DRG => {
-        println("DRG: " + DRG)
-        val subsetTrainingData = traingData.where($"DRGDefinition".startsWith(DRG._1))
-        val subsetTestData = testData.where($"DRGDefinition".startsWith(DRG._1))
-        val aggError = applyRandomForestRegressionCoreAndComputeErrors(subsetTrainingData, subsetTestData)
-        (DRG._1, aggError._1, aggError._2, aggError._3, aggError._4, aggError._5, aggError._6,
-          subsetTrainingData.count(), subsetTestData.count())
-      }
-      )
+    val DRGErrors = distinctDRGDefinitions.sorted.map(DRG => {
+      val subsetTrainingData = traingData.where($"DRGDefinition".startsWith(DRG))
+      val subsetTestData = testData.where($"DRGDefinition".startsWith(DRG))
+      val aggError = applyRandomForestRegressionCoreAndComputeErrors(subsetTrainingData, subsetTestData)
+      (DRG, aggError._1, aggError._2, aggError._3, aggError._4, aggError._5, aggError._6,
+        subsetTrainingData.count(), subsetTestData.count())
+    }
+    )
 
     // TODO: the outputFile must be different for each run or the previous output must be deleted.
-    val outputFile = "PerDRGError_Config1_81_110"
+    val outputFile = "PerDRGError_depth_8_trees_20"
     testData.sparkSession.sparkContext.parallelize(DRGErrors)
       .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
         "MaxPercentError", "TrainRows", "TestRows")
@@ -124,7 +126,7 @@ object Regressors {
     // Random Forest Regresser
     val classifier = new RandomForestRegressor()
       .setImpurity("variance")
-      .setMaxDepth(4)
+      .setMaxDepth(8)
       .setNumTrees(20)
       .setMaxBins(1000)
       .setFeatureSubsetStrategy("auto")
@@ -135,8 +137,12 @@ object Regressors {
     println("model.featureImportances: " + model.featureImportances)
 
     val predictions = model.transform(testData).cache()
+    //predictions.select("DRGDefinition", "TotalDischargesDouble", "count(DISTINCT DRGDefinition)", "ProviderZipCode",
+      //"TotalDischarges", "MedianHousePrice", "features",
+      //"AverageTotalPayments", "label", "prediction").show(5, truncate = false)
+
     predictions.select("DRGDefinition", "TotalDischargesDouble", "count(DISTINCT DRGDefinition)", "ProviderZipCode",
-      "TotalDischarges", "MedianHousePrice", "features",
+      "TotalDischarges", "features",
       "AverageTotalPayments", "label", "prediction").show(5, truncate = false)
     predictions
   }
@@ -200,7 +206,7 @@ object Regressors {
     }
     )
     // TODO: the outputFile must be different for each run or the previous output must be deleted.
-    val outputFile = "wholeDRGError_depth_8_maxIter_10"
+    val outputFile = "wholeDRGError_depth_12_maxIter_20"
     testData.sparkSession.sparkContext.parallelize(Array(overallErrors) ++ DRGErrors)
       .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
         "MaxPercentError", "TrainRows", "TestRows")
@@ -246,7 +252,7 @@ object Regressors {
     )
 
     // TODO: the outputFile must be different for each run or the previous output must be deleted.
-    val outputFile = "PerDRGError_depth_8_maxIter_10"
+    val outputFile = "PerDRGError_depth_12_maxIter_20"
     testData.sparkSession.sparkContext.parallelize(DRGErrors)
       .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
         "MaxPercentError", "TrainRows", "TestRows")
@@ -259,9 +265,9 @@ object Regressors {
     val gbt = new GBTRegressor()
       .setLabelCol("label")
       .setFeaturesCol("features")
-      .setMaxIter(10)
+      .setMaxIter(20)
       .setImpurity("variance")
-      .setMaxDepth(8)
+      .setMaxDepth(12)
       .setMaxBins(100)
       .setSeed(5043)
 
@@ -292,7 +298,7 @@ object Regressors {
       .withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
       .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")))
-      .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+      //.withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
 
     val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
       .setOutputCol("feature1")
@@ -301,8 +307,13 @@ object Regressors {
     //    val assembler = new VectorAssembler().setInputCols(Array("feature1",
     //      "ProviderZipCodeDouble", "MedianHousePrice","count(DISTINCT DRGDefinition)")).setOutputCol("features")
 
+    //val assembler = new VectorAssembler().setInputCols(Array("feature1",
+      //"ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      //"count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
+    //Without MedianHousePrice
     val assembler = new VectorAssembler().setInputCols(Array("feature1",
-      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      "ProviderZipCodeDouble", "TotalDischargesDouble",
       "count(DISTINCT DRGDefinition)")).setOutputCol("features")
 
     val df2 = assembler.transform(df_feature1)
@@ -335,7 +346,7 @@ object Regressors {
     )
 
     // TODO: the outputFile must be different for each run or the previous output must be deleted.
-    val outputFile = "maxIterations_3"
+    val outputFile = "SingleModel_default"
     testData.sparkSession.sparkContext.parallelize(Array(overallErrors) ++ DRGErrors)
       .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
         "MaxPercentError", "TrainRows", "TestRows")
@@ -350,13 +361,20 @@ object Regressors {
       .withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
       .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")))
-      .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+      //.withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+
+
 
     //    val assembler = new VectorAssembler().setInputCols(Array(
     //      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice")).setOutputCol("features")
 
+    //val assembler = new VectorAssembler().setInputCols(Array(
+      //"ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      //"count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
+    //Without MedianHousePrice
     val assembler = new VectorAssembler().setInputCols(Array(
-      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      "ProviderZipCodeDouble", "TotalDischargesDouble",
       "count(DISTINCT DRGDefinition)")).setOutputCol("features")
 
     val df2 = assembler.transform(df)
@@ -403,9 +421,14 @@ object Regressors {
 
     // Apply the model on testData
     val predictions_lr = lrModel.transform(testData).cache()
+    //predictions_lr.select("DRGDefinition", "TotalDischargesDouble", "count(DISTINCT DRGDefinition)", "ProviderZipCode",
+     // "TotalDischarges", "MedianHousePrice", "features",
+      //"AverageTotalPayments", "label", "prediction").show(5, truncate = false)
+
     predictions_lr.select("DRGDefinition", "TotalDischargesDouble", "count(DISTINCT DRGDefinition)", "ProviderZipCode",
-      "TotalDischarges", "MedianHousePrice", "features",
+      "TotalDischarges", "features",
       "AverageTotalPayments", "label", "prediction").show(5, truncate = false)
+
 
     predictions_lr
 
