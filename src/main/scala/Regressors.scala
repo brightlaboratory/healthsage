@@ -61,7 +61,7 @@ object Regressors {
     )
 
     // TODO: the outputFile must be different for each run or the previous output must be deleted.
-    val outputFile = "wholeDRGError_depth_8_trees_20"
+    val outputFile = "wholeDRGError_depth_12_trees_20"
     testData.sparkSession.sparkContext.parallelize(Array(overallErrors) ++ DRGErrors)
       .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
         "MaxPercentError", "TrainRows", "TestRows")
@@ -114,7 +114,7 @@ object Regressors {
     )
 
     // TODO: the outputFile must be different for each run or the previous output must be deleted.
-    val outputFile = "PerDRGError_depth_8_trees_20"
+    val outputFile = "PerDRGError_depth_12_trees_20"
     testData.sparkSession.sparkContext.parallelize(DRGErrors)
       .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
         "MaxPercentError", "TrainRows", "TestRows")
@@ -126,7 +126,7 @@ object Regressors {
     // Random Forest Regresser
     val classifier = new RandomForestRegressor()
       .setImpurity("variance")
-      .setMaxDepth(8)
+      .setMaxDepth(12)
       .setNumTrees(20)
       .setMaxBins(1000)
       .setFeatureSubsetStrategy("auto")
@@ -163,7 +163,7 @@ object Regressors {
       .withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
       .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")))
-      .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+      //.withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
 
     val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
       .setOutputCol("feature1")
@@ -172,9 +172,14 @@ object Regressors {
     //  val assembler = new VectorAssembler().setInputCols(Array("feature1",
     //    "ProviderZipCodeDouble", "MedianHousePrice","count(DISTINCT DRGDefinition)")).setOutputCol("features")
 
+   // val assembler = new VectorAssembler().setInputCols(Array("feature1",
+     // "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      //"count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
     val assembler = new VectorAssembler().setInputCols(Array("feature1",
-      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      "ProviderZipCodeDouble", "TotalDischargesDouble",
       "count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
 
     val df2 = assembler.transform(df_feature1)
 
@@ -206,7 +211,7 @@ object Regressors {
     }
     )
     // TODO: the outputFile must be different for each run or the previous output must be deleted.
-    val outputFile = "wholeDRGError_depth_12_maxIter_20"
+    val outputFile = "wholeDRGError_depth_12_maxIter_10"
     testData.sparkSession.sparkContext.parallelize(Array(overallErrors) ++ DRGErrors)
       .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
         "MaxPercentError", "TrainRows", "TestRows")
@@ -223,10 +228,14 @@ object Regressors {
       .withColumn("label", origDf("AverageTotalPayments"))
       .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
       .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")))
-      .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+      //.withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+
+    //val assembler = new VectorAssembler().setInputCols(Array(
+     // "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      //"count(DISTINCT DRGDefinition)")).setOutputCol("features")
 
     val assembler = new VectorAssembler().setInputCols(Array(
-      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      "ProviderZipCodeDouble", "TotalDischargesDouble",
       "count(DISTINCT DRGDefinition)")).setOutputCol("features")
 
     val df2 = assembler.transform(df)
@@ -252,7 +261,7 @@ object Regressors {
     )
 
     // TODO: the outputFile must be different for each run or the previous output must be deleted.
-    val outputFile = "PerDRGError_depth_12_maxIter_20"
+    val outputFile = "PerDRGError_depth_8_maxIter_10"
     testData.sparkSession.sparkContext.parallelize(DRGErrors)
       .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
         "MaxPercentError", "TrainRows", "TestRows")
@@ -265,7 +274,7 @@ object Regressors {
     val gbt = new GBTRegressor()
       .setLabelCol("label")
       .setFeaturesCol("features")
-      .setMaxIter(20)
+      .setMaxIter(10)
       .setImpurity("variance")
       .setMaxDepth(12)
       .setMaxBins(100)
@@ -274,8 +283,12 @@ object Regressors {
     val model = gbt.fit(trainingData)
 
     val predictions = model.transform(testData).cache()
+    //predictions.select("DRGDefinition", "TotalDischargesDouble", "count(DISTINCT DRGDefinition)", "ProviderZipCode",
+     // "TotalDischarges", "MedianHousePrice", "features",
+     // "AverageTotalPayments", "label", "prediction").show(5, truncate = false)
+
     predictions.select("DRGDefinition", "TotalDischargesDouble", "count(DISTINCT DRGDefinition)", "ProviderZipCode",
-      "TotalDischarges", "MedianHousePrice", "features",
+      "TotalDischarges", "features",
       "AverageTotalPayments", "label", "prediction").show(5, truncate = false)
     predictions
 

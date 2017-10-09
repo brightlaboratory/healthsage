@@ -95,7 +95,7 @@ object SimpleApp {
 
   def applyMachineLearningAlgorithms(df: DataFrame): Unit = {
 
-    //Regressors.predictAverageTotalPaymentsUsingGBT(df)
+    Regressors.predictAverageTotalPaymentsUsingGBT(df)
     //Regressors.applyGBTRegressionOnEachDRGSeparately(df)
     //    ClusteringAlgorithm.applyKmeans(df)
     //    Classifiers.applyNaiveBayesClassifier(df)
@@ -103,8 +103,8 @@ object SimpleApp {
 
     //generateAdHocStats(df)
 //    Regressors.predictAverageTotalPaymentsUsingGBT(df)
-      Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
-      Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
+      //Regressors.predictAverageTotalPaymentsUsingRandomForestRegression(df)
+      //Regressors.applyRandomForestRegressionOnEachDRGSeparately(df)
       //Regressors.applyLinearRegression(df)
       //Regressors.applyLinearRegressionOnEachDRGSeparately(df)
 //    StatisticsComputer.computeStatsOnPaymentData(df)
