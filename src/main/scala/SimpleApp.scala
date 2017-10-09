@@ -95,7 +95,10 @@ object SimpleApp {
 
   def applyMachineLearningAlgorithms(df: DataFrame): Unit = {
 
-    Regressors.predictAverageTotalPaymentsUsingGBT(df)
+    Regressors.predictAverageTotalPaymentsUsingDecisionTreesRegression(df)
+    Regressors.applyDecisionTreesRegressionOnEachDRGSeparately(df)
+
+    //Regressors.predictAverageTotalPaymentsUsingGBT(df)
     //Regressors.applyGBTRegressionOnEachDRGSeparately(df)
     //    ClusteringAlgorithm.applyKmeans(df)
     //    Classifiers.applyNaiveBayesClassifier(df)

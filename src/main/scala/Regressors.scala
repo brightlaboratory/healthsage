@@ -1,7 +1,7 @@
 import SimpleApp.toDouble
 import org.apache.spark.ml.evaluation.RegressionEvaluator
 import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
-import org.apache.spark.ml.regression.{GBTRegressor, GeneralizedLinearRegression, LinearRegression, RandomForestRegressor}
+import org.apache.spark.ml.regression.{GBTRegressor, GeneralizedLinearRegression, LinearRegression, RandomForestRegressor,DecisionTreeRegressor}
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions.{avg, max, min, udf}
 
@@ -451,6 +451,147 @@ object Regressors {
   def applyLinearRegressionCoreAndComputeErrors(trainingData: DataFrame, testData: DataFrame) = {
 
     val predictions = applyLinearRegressionCore(trainingData, testData)
+    val predictionWithErrors = computeAggregateError(computeError(predictions))
+    predictionWithErrors
+  }
+
+
+  def predictAverageTotalPaymentsUsingDecisionTreesRegression(origDf: DataFrame) = {
+
+    // Using count(DISTINCT DRGDefinition) as a feature
+
+    val df = addNumberOfDRGsforProviderAsColumn(origDf)
+      .withColumn("label", origDf("AverageTotalPayments"))
+      .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+      .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")))
+      .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+
+    val feature1Indexer = new StringIndexer().setInputCol("DRGDefinition")
+      .setOutputCol("feature1")
+    val df_feature1 = feature1Indexer.fit(df).transform(df)
+
+    //  val assembler = new VectorAssembler().setInputCols(Array("feature1",
+    //    "ProviderZipCodeDouble", "MedianHousePrice","count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
+    //Taking all the features
+
+    val assembler = new VectorAssembler().setInputCols(Array("feature1",
+      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      "count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
+
+    val df2 = assembler.transform(df_feature1)
+
+    val splitSeed = 5043
+    val Array(trainingDataOrig, testDataOrig) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
+
+    val trainingData = trainingDataOrig.cache()
+    val testData = testDataOrig.cache()
+
+    import trainingData.sparkSession.implicits._
+    val distinctDRGDefinitions = trainingData.select($"DRGDefinition").distinct()
+      .rdd.map(row => row.getString(0)).collect()
+
+    val predictions = applyGBTRegressionCore(trainingData, testData).cache()
+
+    val overallAggError = computeAggregateError(computeError(predictions))
+    val overallErrors = ("Overall", overallAggError._1, overallAggError._2, overallAggError._3,
+      overallAggError._4, overallAggError._5, overallAggError._6,
+      trainingData.count(), testData.count())
+
+    // Here we will computer errors for each DRG separately
+    val DRGErrors = distinctDRGDefinitions.sorted.map(DRG => {
+      val subsetTrainingData = trainingData.where($"DRGDefinition".startsWith(DRG))
+      val subsetTestData = testData.where($"DRGDefinition".startsWith(DRG))
+      val subsetPredictions = predictions.where($"DRGDefinition".startsWith(DRG))
+      val aggError = computeAggregateError(computeError(subsetPredictions))
+      (DRG, aggError._1, aggError._2, aggError._3, aggError._4, aggError._5, aggError._6,
+        subsetTrainingData.count(), subsetTestData.count())
+    }
+    )
+    // TODO: the outputFile must be different for each run or the previous output must be deleted.
+    val outputFile = "wholeDRGError_depth_3"
+    testData.sparkSession.sparkContext.parallelize(Array(overallErrors) ++ DRGErrors)
+      .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
+        "MaxPercentError", "TrainRows", "TestRows")
+      .coalesce(1).write.option("header", "true").csv(outputFile)
+
+  }
+
+
+  def applyDecisionTreesRegressionOnEachDRGSeparately(origDf: DataFrame) = {
+
+    // We will use AverageTotalPayments as the label
+
+    val df = addNumberOfDRGsforProviderAsColumn(origDf)
+      .withColumn("label", origDf("AverageTotalPayments"))
+      .withColumn("ProviderZipCodeDouble", toDouble(origDf("ProviderZipCode")))
+      .withColumn("TotalDischargesDouble", toDouble(origDf("TotalDischarges")))
+      .withColumn("MedianHousePrice", toDouble(origDf("2011-12")))
+
+    val assembler = new VectorAssembler().setInputCols(Array(
+      "ProviderZipCodeDouble", "TotalDischargesDouble", "MedianHousePrice",
+      "count(DISTINCT DRGDefinition)")).setOutputCol("features")
+
+
+
+    val df2 = assembler.transform(df)
+
+    val splitSeed = 5043
+    val Array(trainingDataOrig, testDataOrig) = df2.randomSplit(Array(0.7, 0.3), splitSeed)
+
+    val traingData = trainingDataOrig.cache()
+    val testData = testDataOrig.cache()
+
+    import traingData.sparkSession.implicits._
+    val distinctDRGDefinitions = traingData.select($"DRGDefinition").distinct()
+      .rdd.map(row => row.getString(0)).collect()
+
+    // Here we will build a model for each DRG separately
+    val DRGErrors = distinctDRGDefinitions.sorted.map(DRG => {
+      val subsetTrainingData = traingData.where($"DRGDefinition".startsWith(DRG))
+      val subsetTestData = testData.where($"DRGDefinition".startsWith(DRG))
+      val aggError = applyGBTRegressionCoreAndComputeErrors(subsetTrainingData, subsetTestData)
+      (DRG, aggError._1, aggError._2, aggError._3, aggError._4, aggError._5, aggError._6,
+        subsetTrainingData.count(), subsetTestData.count())
+    }
+    )
+
+    // TODO: the outputFile must be different for each run or the previous output must be deleted.
+    val outputFile = "PerDRGError_depth_3"
+    testData.sparkSession.sparkContext.parallelize(DRGErrors)
+      .toDF("DRG", "MinError", "AvgError", "MaxError", "MinPercentError", "AvgPercentError",
+        "MaxPercentError", "TrainRows", "TestRows")
+      .coalesce(1).write.option("header", "true").csv(outputFile)
+
+  }
+
+  def applyDecisionTreesRegressionCore(trainingData: DataFrame, testData: DataFrame) = {
+
+    val dt = new DecisionTreeRegressor()
+      .setLabelCol("label")
+      .setFeaturesCol("features")
+      .setImpurity("variance")
+      .setMaxDepth(3)
+      .setMaxBins(100)
+      .setSeed(5043)
+
+    val model = dt.fit(trainingData)
+
+    val predictions = model.transform(testData).cache()
+
+    predictions.select("DRGDefinition", "TotalDischargesDouble", "count(DISTINCT DRGDefinition)", "ProviderZipCode",
+    "TotalDischarges", "MedianHousePrice", "features",
+    "AverageTotalPayments", "label", "prediction").show(5, truncate = false)
+
+
+    predictions
+
+  }
+
+  def applyDecisionTreesRegressionCoreAndComputeErrors(trainingData: DataFrame, testData: DataFrame) = {
+
+    val predictions = applyDecisionTreesRegressionCore(trainingData, testData)
     val predictionWithErrors = computeAggregateError(computeError(predictions))
     predictionWithErrors
   }
